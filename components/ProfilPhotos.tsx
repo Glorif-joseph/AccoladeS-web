@@ -1,9 +1,9 @@
 "use client";
 
+import { mettreAJourPhotosAvatar, mettreAJourPhotosCouverture } from "@/app/compte/actions";
+import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
 import { useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { mettreAJourPhotosAvatar, mettreAJourPhotosCouverture } from "@/app/compte/actions";
 import PalierBadge from "./PalierBadge";
 
 const LIMITE_COUVERTURE = 5;
@@ -13,8 +13,8 @@ export default function ProfilPhotos({
   userId,
   pseudo,
   statutActuel,
-  photosCouvertureInitial,
   photosAvatarInitial,
+  photosCouvertureInitial,
 }: {
   userId: string;
   pseudo: string;
