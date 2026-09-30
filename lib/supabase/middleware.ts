@@ -1,14 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// Le site est maintenant protégé dans son ensemble : rien n'est visible
-// sans être connecté, à l'exception des pages qui permettent justement de
-// se connecter ou de créer un compte (impossible de les protéger aussi,
-// sinon personne ne pourrait jamais se connecter).
+// Le site est protégé dans son ensemble.
+// Seules les pages permettant de se connecter ou de créer un compte restent publiques.
 const CHEMINS_PUBLICS = ["/connexion", "/inscription", "/bienvenue"];
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+  let supabaseResponse = NextResponse.next({
+    request,
+  });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,21 +18,27 @@ export async function updateSession(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
+
+        setAll(
+          cookiesToSet: {
+            name: string;
+            value: string;
+            options?: Record<string, any>;
+          }[]
+        ) {
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value);
+          });
+
+          cookiesToSet.forEach(({ name, value, options }) => {
+            supabaseResponse.cookies.set(name, value, options);
+          });
         },
       },
     }
   );
 
-  // IMPORTANT : ne pas retirer cet appel. Il rafraîchit le token si besoin
-  // et garde la session synchronisée entre le navigateur et le serveur.
+  // Rafraîchit le token si nécessaire et garde la session synchronisée.
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -44,6 +50,7 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/connexion";
     url.searchParams.set("redirect", chemin);
+
     return NextResponse.redirect(url);
   }
 

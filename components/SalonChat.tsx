@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useEffect, useRef, useState } from "react";
 
 type Message = {
   id: string;
@@ -46,8 +46,10 @@ export default function SalonChat({
               .eq("id", nouveau.expediteur_id)
               .single();
             pseudo = data?.pseudo ?? "Membre AccoladeS";
-            pseudoCache.current.set(nouveau.expediteur_id, pseudo);
-          }
+pseudoCache.current.set(
+  nouveau.expediteur_id,
+  pseudo ?? "Membre AccoladeS"
+);          }
 
           setMessages((prev) => [...prev, { ...nouveau, pseudo: pseudo! }]);
         }
