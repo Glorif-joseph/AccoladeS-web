@@ -38,7 +38,7 @@ export default function SalonChat({
         async (payload) => {
           const nouveau = payload.new as Omit<Message, "pseudo">;
 
-          let pseudo = pseudoCache.current.get(nouveau.expediteur_id);
+          let pseudo = pseudoCache.current.get(nouveau.expediteur_id!);
           if (!pseudo) {
             const { data } = await supabase
               .from("profiles")
