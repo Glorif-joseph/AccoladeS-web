@@ -153,7 +153,7 @@ export default function ConversationThread({
                   title="Supprimer"
                   className="shrink-0 mb-1 text-sm opacity-40 hover:opacity-100 transition-opacity"
                 >
-                  🗑️
+                  ✕
                 </button>
               )}
               <p

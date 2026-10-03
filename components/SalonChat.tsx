@@ -152,7 +152,7 @@ export default function SalonChat({
                   title="Supprimer"
                   className="shrink-0 mb-1 text-sm opacity-40 hover:opacity-100 transition-opacity"
                 >
-                  🗑️
+                  ✕
                 </button>
               )}
 
