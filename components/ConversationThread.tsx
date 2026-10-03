@@ -78,36 +78,46 @@ export default function ConversationThread({
     }
   }
 
+  // Plein écran : le composant remplit tout l'espace que lui laisse la page
+  // (flex-1 min-h-0). La liste des messages défile à l'intérieur, la barre
+  // de saisie reste collée en bas. La page parente doit donc être en
+  // "h-dvh flex flex-col" (voir page.tsx de la conversation).
   return (
-    <div className="flex flex-col h-[65vh] border border-ink/10 rounded-2xl overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        {messages.map((m) => (
-          <div key={m.id} className={m.expediteur_id === utilisateurId ? "text-right" : ""}>
-            <p
-              className={`inline-block rounded-2xl px-4 py-2 max-w-[80%] text-sm ${
-                m.expediteur_id === utilisateurId
-                  ? "bg-accent text-paper"
-                  : "bg-accent/10 text-ink"
-              }`}
-            >
-              {m.contenu}
-            </p>
-          </div>
-        ))}
+    <div className="flex flex-col flex-1 min-h-0 w-full bg-paper">
+      <div className="flex-1 min-h-0 overflow-y-auto bg-[#f2f2f2] px-4 py-4 space-y-2.5">
+        {messages.map((m) => {
+          const estMoi = m.expediteur_id === utilisateurId;
+          return (
+            <div key={m.id} className={`flex ${estMoi ? "justify-end" : "justify-start"}`}>
+              <p
+                className={`rounded-2xl px-4 py-2 max-w-[80%] text-sm break-words ${
+                  estMoi
+                    ? "bg-accent text-paper"
+                    : "bg-paper border border-surface-border text-ink"
+                }`}
+              >
+                {m.contenu}
+              </p>
+            </div>
+          );
+        })}
         <div ref={finRef} />
       </div>
 
-      <form onSubmit={envoyer} className="border-t border-ink/10 p-4 flex gap-3">
+      <form
+        onSubmit={envoyer}
+        className="bg-paper border-t border-surface-border px-4 py-3 flex items-center gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      >
         <input
           type="text"
           value={contenu}
           onChange={(e) => setContenu(e.target.value)}
           placeholder="Écrire un message..."
-          className="flex-1 border-b-2 border-ink/20 focus:border-accent outline-none bg-transparent py-2 transition-colors"
+          className="flex-1 bg-surface border border-accent rounded-full px-4 py-2.5 text-sm outline-none"
         />
         <button
           type="submit"
-          className="rounded-full bg-accent text-ink px-5 py-2 text-sm font-medium hover:bg-accent-light transition-colors"
+          className="rounded-full bg-accent text-ink px-5 py-2.5 text-sm font-medium hover:bg-accent-light transition-colors"
         >
           Envoyer
         </button>

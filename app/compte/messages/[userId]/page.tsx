@@ -45,22 +45,32 @@ export default async function Conversation({
     .eq("destinataire_id", user.id)
     .eq("lu", false);
 
+  // Plein écran : la page fait exactement la hauteur de l'écran (h-dvh).
+  // Le header et la barre de titre gardent leur taille, le fil de
+  // discussion prend tout le reste et défile à l'intérieur.
   return (
-    <main className="min-h-screen max-w-2xl mx-auto px-8 py-10">
+    <div className="w-full h-dvh flex flex-col bg-paper">
       <SiteHeader />
 
-      <div className="flex items-center gap-3 mb-8">
-        <Link href="/compte/messages" className="text-sm hover:text-accent transition-colors">
+      <div className="flex items-center gap-3 px-4 py-3 bg-paper border-b border-surface-border">
+        <Link
+          href="/compte/messages"
+          className="text-sm hover:text-accent transition-colors"
+        >
           ← Messages
         </Link>
-        <h1 className="font-display text-2xl">{autreProfil.pseudo}</h1>
+        <h1 className="font-display text-xl font-bold truncate">
+          {autreProfil.pseudo}
+        </h1>
       </div>
 
-      <ConversationThread
-        messagesInitiaux={messages ?? []}
-        utilisateurId={user.id}
-        autreId={autreId}
-      />
-    </main>
+      <main className="flex-1 min-h-0 flex flex-col">
+        <ConversationThread
+          messagesInitiaux={messages ?? []}
+          utilisateurId={user.id}
+          autreId={autreId}
+        />
+      </main>
+    </div>
   );
 }
