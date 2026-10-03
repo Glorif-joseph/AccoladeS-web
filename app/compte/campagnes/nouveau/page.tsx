@@ -46,7 +46,7 @@ export default async function NouvelleCampagne({
 
         <div className="grid sm:grid-cols-2 gap-6">
           <label className="block">
-            <span className="text-sm text-ink/70">Prix (€)</span>
+            <span className="text-sm text-ink/70">Prix ($)</span>
             <input
               type="number"
               name="prix"
