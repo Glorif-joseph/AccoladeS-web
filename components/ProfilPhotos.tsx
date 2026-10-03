@@ -135,7 +135,7 @@ export default function ProfilPhotos({
         {/* Avatar + pseudo, chevauche la couverture comme dans l'app ; le
             badge de palier reprend le gris neutre observé sur la capture
             partagée ("Nouveau"), pas une teinte turquoise inventée */}
-        <div className="flex items-end justify-between -mt-9 mb-1">
+        <div className="relative z-10 flex items-end justify-between -mt-9 mb-1">
           <div className="flex items-end gap-3">
             <button
               onClick={() =>
