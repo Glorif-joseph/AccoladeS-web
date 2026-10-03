@@ -59,6 +59,16 @@ export default function SalonChat({
           ]);
         }
       )
+      // Un message supprimé disparaît aussi chez les autres membres.
+      // (Supabase n'envoie que l'identifiant du message supprimé.)
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "messages_groupe" },
+        (payload) => {
+          const id = (payload.old as { id?: string }).id;
+          if (id) setMessages((prev) => prev.filter((m) => m.id !== id));
+        }
+      )
       .subscribe();
 
     return () => {
@@ -92,6 +102,33 @@ export default function SalonChat({
     if (error) alert(error.message);
   }
 
+  // Supprime un de TES messages : retrait immédiat à l'écran, puis
+  // suppression en base. Si la base refuse (ou ne supprime rien), le message
+  // revient à sa place avec un message d'erreur.
+  async function supprimer(message: Message) {
+    if (!utilisateurId || message.expediteur_id !== utilisateurId) return;
+    if (!confirm("Supprimer ce message ?")) return;
+
+    setMessages((prev) => prev.filter((m) => m.id !== message.id));
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("messages_groupe")
+      .delete()
+      .eq("id", message.id)
+      .eq("expediteur_id", utilisateurId)
+      .select("id");
+
+    if (error || !data || data.length === 0) {
+      setMessages((prev) =>
+        prev.some((m) => m.id === message.id)
+          ? prev
+          : [...prev, message].sort((a, b) => (a.created_at < b.created_at ? -1 : 1))
+      );
+      alert(error?.message ?? "Impossible de supprimer ce message.");
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="py-4 border-b border-surface-border shrink-0">
@@ -103,7 +140,22 @@ export default function SalonChat({
           const moi = m.expediteur_id === utilisateurId;
           const ambassadeur = estAmbassadeur(m.statutExpediteur);
           return (
-            <div key={m.id} className={`flex ${moi ? "justify-end" : "justify-start"}`}>
+            <div
+              key={m.id}
+              className={`flex items-end gap-2 ${moi ? "justify-end" : "justify-start"}`}
+            >
+              {moi && (
+                <button
+                  type="button"
+                  onClick={() => supprimer(m)}
+                  aria-label="Supprimer ce message"
+                  title="Supprimer"
+                  className="shrink-0 mb-1 text-sm opacity-40 hover:opacity-100 transition-opacity"
+                >
+                  🗑️
+                </button>
+              )}
+
               <div
                 className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl ${
                   moi

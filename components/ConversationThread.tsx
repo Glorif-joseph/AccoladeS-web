@@ -50,6 +50,17 @@ export default function ConversationThread({
           supabase.from("messages_prives").update({ lu: true }).eq("id", nouveau.id);
         }
       )
+      // Quand l'interlocuteur supprime un message, il disparaît aussi ici.
+      // Supabase n'accepte pas de filtre sur les suppressions et n'envoie
+      // que l'identifiant : on retire simplement ce message s'il est affiché.
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "messages_prives" },
+        (payload) => {
+          const id = (payload.old as { id?: string }).id;
+          if (id) setMessages((prev) => prev.filter((m) => m.id !== id));
+        }
+      )
       .subscribe();
 
     return () => {
@@ -93,6 +104,33 @@ export default function ConversationThread({
     }
   }
 
+  // Supprime un de TES messages : retrait immédiat à l'écran, puis
+  // suppression en base. Si la base refuse (ou ne supprime rien), le message
+  // revient à sa place avec un message d'erreur.
+  async function supprimer(message: Message) {
+    if (message.expediteur_id !== utilisateurId) return;
+    if (!confirm("Supprimer ce message ?")) return;
+
+    setMessages((prev) => prev.filter((m) => m.id !== message.id));
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("messages_prives")
+      .delete()
+      .eq("id", message.id)
+      .eq("expediteur_id", utilisateurId)
+      .select("id");
+
+    if (error || !data || data.length === 0) {
+      setMessages((prev) =>
+        prev.some((m) => m.id === message.id)
+          ? prev
+          : [...prev, message].sort((a, b) => (a.created_at < b.created_at ? -1 : 1))
+      );
+      alert(error?.message ?? "Impossible de supprimer ce message.");
+    }
+  }
+
   // Plein écran : le composant remplit tout l'espace que lui laisse la page
   // (flex-1 min-h-0). La liste des messages défile à l'intérieur, la barre
   // de saisie reste collée en bas. La page parente doit donc être en
@@ -103,7 +141,21 @@ export default function ConversationThread({
         {messages.map((m) => {
           const estMoi = m.expediteur_id === utilisateurId;
           return (
-            <div key={m.id} className={`flex ${estMoi ? "justify-end" : "justify-start"}`}>
+            <div
+              key={m.id}
+              className={`flex items-end gap-2 ${estMoi ? "justify-end" : "justify-start"}`}
+            >
+              {estMoi && (
+                <button
+                  type="button"
+                  onClick={() => supprimer(m)}
+                  aria-label="Supprimer ce message"
+                  title="Supprimer"
+                  className="shrink-0 mb-1 text-sm opacity-40 hover:opacity-100 transition-opacity"
+                >
+                  🗑️
+                </button>
+              )}
               <p
                 className={`rounded-2xl px-4 py-2 max-w-[80%] text-sm break-words whitespace-pre-wrap ${
                   estMoi
