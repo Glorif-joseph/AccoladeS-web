@@ -67,18 +67,17 @@ export default async function Messages() {
     }))
     .sort((a, b) => (a.dateDernierMessage < b.dateDernierMessage ? 1 : -1));
 
+  // Plus de conteneur max-w ni de padding ici, et plus de titre : le titre
+  // « Messages » est maintenant rendu par MessagesListe.
   return (
-    <main className="min-h-screen">
+    <div className="w-full min-h-screen bg-paper flex flex-col">
       <SiteHeader />
-      <div className="max-w-xl mx-auto px-8 py-8">
-        <h1 className="font-display text-2xl font-bold text-center mb-6">
-          Messages
-        </h1>
+      <main className="flex-1 flex flex-col">
         <MessagesListe
           conversations={conversations}
           nbNouveauxSalon={nbNouveauxSalon ?? 0}
         />
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
