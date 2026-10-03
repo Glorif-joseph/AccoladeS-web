@@ -91,12 +91,13 @@ export default function MembreDetailContent({
       </div>
 
       <div className="px-4 flex flex-col items-center text-center mb-6">
+        {/* "relative z-10" fait passer l'avatar AU-DESSUS de la couverture */}
         <button
           onClick={() =>
             photosAvatar.length > 1 &&
             setAvatarIndex((i) => (i + 1) % photosAvatar.length)
           }
-          className="-mt-[38px] mb-2"
+          className="relative z-10 -mt-[38px] mb-2"
         >
           {photosAvatar.length > 0 ? (
             <Image
