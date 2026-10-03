@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import EmojiPicker from "./EmojiPicker";
 
 type Message = {
   id: string;
@@ -22,6 +23,7 @@ export default function ConversationThread({
   const [messages, setMessages] = useState<Message[]>(messagesInitiaux);
   const [contenu, setContenu] = useState("");
   const finRef = useRef<HTMLDivElement>(null);
+  const champTexte = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -59,6 +61,19 @@ export default function ConversationThread({
     finRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  // Insère l'émoji à la position du curseur (ou remplace la sélection).
+  function insererEmoji(emoji: string) {
+    const champ = champTexte.current;
+    const debut = champ?.selectionStart ?? contenu.length;
+    const fin = champ?.selectionEnd ?? contenu.length;
+    setContenu(contenu.slice(0, debut) + emoji + contenu.slice(fin));
+
+    requestAnimationFrame(() => {
+      const position = debut + emoji.length;
+      champ?.setSelectionRange(position, position);
+    });
+  }
+
   async function envoyer(e: React.FormEvent) {
     e.preventDefault();
     const texte = contenu.trim();
@@ -90,7 +105,7 @@ export default function ConversationThread({
           return (
             <div key={m.id} className={`flex ${estMoi ? "justify-end" : "justify-start"}`}>
               <p
-                className={`rounded-2xl px-4 py-2 max-w-[80%] text-sm break-words ${
+                className={`rounded-2xl px-4 py-2 max-w-[80%] text-sm break-words whitespace-pre-wrap ${
                   estMoi
                     ? "bg-accent text-paper"
                     : "bg-paper border border-surface-border text-ink"
@@ -106,14 +121,16 @@ export default function ConversationThread({
 
       <form
         onSubmit={envoyer}
-        className="bg-paper border-t border-surface-border px-4 py-3 flex items-center gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        className="bg-paper border-t border-surface-border px-4 py-3 flex items-center gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
       >
+        <EmojiPicker onChoisir={insererEmoji} />
         <input
+          ref={champTexte}
           type="text"
           value={contenu}
           onChange={(e) => setContenu(e.target.value)}
           placeholder="Écrire un message..."
-          className="flex-1 bg-surface border border-accent rounded-full px-4 py-2.5 text-sm outline-none"
+          className="flex-1 min-w-0 bg-surface border border-accent rounded-full px-4 py-2.5 text-sm outline-none"
         />
         <button
           type="submit"

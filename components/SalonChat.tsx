@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import EmojiPicker from "./EmojiPicker";
 
 type Message = {
   id: string;
@@ -9,7 +10,14 @@ type Message = {
   contenu: string;
   created_at: string;
   pseudoExpediteur?: string;
+  photoExpediteur?: string | null;
+  statutExpediteur?: string | null;
 };
+
+// "Ambassadeur" (ou "Ambassadrice"), quelle que soit la casse.
+function estAmbassadeur(statut?: string | null) {
+  return !!statut && statut.trim().toLowerCase().startsWith("ambassad");
+}
 
 export default function SalonChat({
   messagesInitiaux,
@@ -21,6 +29,7 @@ export default function SalonChat({
   const [messages, setMessages] = useState<Message[]>(messagesInitiaux);
   const [texte, setTexte] = useState("");
   const finListe = useRef<HTMLDivElement>(null);
+  const champTexte = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     finListe.current?.scrollIntoView({ behavior: "smooth" });
@@ -37,12 +46,16 @@ export default function SalonChat({
           const nouveau = payload.new as Message;
           const { data: profil } = await supabase
             .from("profiles")
-            .select("pseudo")
+            .select("pseudo, statut_actuel")
             .eq("id", nouveau.expediteur_id)
             .single();
           setMessages((prev) => [
             ...prev,
-            { ...nouveau, pseudoExpediteur: profil?.pseudo ?? "Membre" },
+            {
+              ...nouveau,
+              pseudoExpediteur: profil?.pseudo ?? "Membre",
+              statutExpediteur: profil?.statut_actuel ?? null,
+            },
           ]);
         }
       )
@@ -52,6 +65,19 @@ export default function SalonChat({
       supabase.removeChannel(canal);
     };
   }, []);
+
+  // Insère l'émoji à la position du curseur (ou remplace la sélection).
+  function insererEmoji(emoji: string) {
+    const champ = champTexte.current;
+    const debut = champ?.selectionStart ?? texte.length;
+    const fin = champ?.selectionEnd ?? texte.length;
+    setTexte(texte.slice(0, debut) + emoji + texte.slice(fin));
+
+    requestAnimationFrame(() => {
+      const position = debut + emoji.length;
+      champ?.setSelectionRange(position, position);
+    });
+  }
 
   async function envoyer() {
     if (!texte.trim() || !utilisateurId) return;
@@ -75,6 +101,7 @@ export default function SalonChat({
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {messages.map((m) => {
           const moi = m.expediteur_id === utilisateurId;
+          const ambassadeur = estAmbassadeur(m.statutExpediteur);
           return (
             <div key={m.id} className={`flex ${moi ? "justify-end" : "justify-start"}`}>
               <div
@@ -84,12 +111,26 @@ export default function SalonChat({
                     : "bg-surface text-ink rounded-bl-sm"
                 }`}
               >
-                {!moi && (
-                  <p className="text-[11px] font-bold text-ink/60 mb-0.5">
-                    {m.pseudoExpediteur}
+                {/* Pseudo : affiché pour les autres membres, et aussi pour
+                    toi si tu es ambassadeur (pour y voir le badge rouge). */}
+                {(!moi || ambassadeur) && (
+                  <p
+                    className={`flex items-center gap-1.5 text-[11px] font-bold mb-0.5 ${
+                      moi ? "text-paper/70" : "text-ink/60"
+                    }`}
+                  >
+                    <span>{m.pseudoExpediteur}</span>
+                    {ambassadeur && (
+                      <span
+                        title="Ambassadeur"
+                        className="inline-block w-2.5 h-2.5 rounded-full bg-danger shrink-0"
+                      >
+                        <span className="sr-only">Ambassadeur</span>
+                      </span>
+                    )}
                   </p>
                 )}
-                <p className="text-sm">{m.contenu}</p>
+                <p className="text-sm whitespace-pre-wrap break-words">{m.contenu}</p>
               </div>
             </div>
           );
@@ -97,8 +138,10 @@ export default function SalonChat({
         <div ref={finListe} />
       </div>
 
-      <div className="flex items-end gap-2 p-2.5 border-t border-surface-border shrink-0">
+      <div className="flex items-end gap-1 p-2.5 border-t border-surface-border shrink-0">
+        <EmojiPicker onChoisir={insererEmoji} />
         <textarea
+          ref={champTexte}
           value={texte}
           onChange={(e) => setTexte(e.target.value)}
           onKeyDown={(e) => {
@@ -113,7 +156,7 @@ export default function SalonChat({
         />
         <button
           onClick={envoyer}
-          className="w-10 h-10 rounded-full bg-anthracite text-paper flex items-center justify-center shrink-0"
+          className="w-10 h-10 rounded-full bg-anthracite text-paper flex items-center justify-center shrink-0 ml-1"
           aria-label="Envoyer"
         >
           ➤
