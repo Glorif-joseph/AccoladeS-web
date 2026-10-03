@@ -32,18 +32,26 @@ export default async function Salon() {
   const idsExpediteurs = [...new Set((data ?? []).map((m) => m.expediteur_id))];
   const { data: profils } = await supabase
     .from("profiles")
-    .select("id, pseudo")
+    .select("id, pseudo, photo_url, statut_actuel")
     .in("id", idsExpediteurs.length ? idsExpediteurs : [""]);
 
-  const pseudoParId: Record<string, string> = {};
+  const profilParId: Record<
+    string,
+    { pseudo: string; photo_url: string | null; statut_actuel: string | null }
+  > = {};
   (profils ?? []).forEach((p) => {
-    pseudoParId[p.id] = p.pseudo;
+    profilParId[p.id] = p;
   });
 
-  const messages = (data ?? []).map((m) => ({
-    ...m,
-    pseudoExpediteur: pseudoParId[m.expediteur_id] ?? "Membre",
-  }));
+  const messages = (data ?? []).map((m) => {
+    const profil = profilParId[m.expediteur_id];
+    return {
+      ...m,
+      pseudoExpediteur: profil?.pseudo ?? "Membre",
+      photoExpediteur: profil?.photo_url ?? null,
+      statutExpediteur: profil?.statut_actuel ?? null,
+    };
+  });
 
   return (
     <main className="flex flex-col h-[100dvh]">
