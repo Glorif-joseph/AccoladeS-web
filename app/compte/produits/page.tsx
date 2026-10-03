@@ -1,53 +1,85 @@
 import Link from "next/link";
 import Image from "next/image";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { supprimerProduit } from "./actions";
+import SiteHeader from "@/components/SiteHeader";
 
-// CampagnesRangee.tsx n'a jamais été partagé — reconstruit à partir du
-// schéma déjà utilisé sur /campagnes (même colonnes). Rangée horizontale
-// scrollable de vignettes plutôt qu'une liste verticale, pour se distinguer
-// du catalogue produits en dessous.
-export default async function CampagnesRangee() {
+export const revalidate = 0;
+
+export default async function MesProduits() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  const { data: campagnes } = await supabase
-    .from("campagnes")
-    .select("id, titre, prix, media_url, media_type, date_fin")
-    .order("date_fin", { ascending: true })
-    .limit(10);
+  if (!user) redirect("/connexion?redirect=/compte/produits");
 
-  if (!campagnes || campagnes.length === 0) return null;
+  const { data: produits } = await supabase
+    .from("produits")
+    .select("id, titre, image_url, date_publication, likes(count)")
+    .eq("profile_id", user.id)
+    .order("date_publication", { ascending: false });
 
   return (
-    <div className="mb-6 -mx-8 px-8 overflow-x-auto">
-      <div className="flex gap-3 w-max">
-        {campagnes.map((c) => (
-          <Link
-            key={c.id}
-            href={`/campagnes/${c.id}`}
-            className="w-32 shrink-0 bg-paper border border-surface-border rounded-xl overflow-hidden"
-          >
-            {c.media_type === "video" ? (
-              <video
-                src={c.media_url}
-                muted
-                className="w-full h-24 object-cover bg-surface"
-              />
-            ) : (
-              <Image
-                src={c.media_url}
-                alt={c.titre}
-                width={128}
-                height={96}
-                className="w-full h-24 object-cover bg-surface"
-              />
-            )}
-            <div className="p-2">
-              <p className="text-xs font-semibold truncate">{c.titre}</p>
-              <p className="text-xs text-accent font-bold mt-0.5">{c.prix} $</p>
-            </div>
-          </Link>
-        ))}
+    <main className="min-h-screen max-w-3xl mx-auto px-8 py-10">
+      <SiteHeader />
+
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="font-display text-3xl">Mes produits</h1>
+        <Link
+          href="/compte/produits/nouveau"
+          className="rounded-full bg-accent text-ink px-5 py-2 text-sm font-medium hover:bg-accent-light transition-colors"
+        >
+          + Nouveau produit
+        </Link>
       </div>
-    </div>
+
+      {produits && produits.length === 0 && (
+        <p className="text-ink/50">
+          Tu n&rsquo;as encore publié aucun produit.
+        </p>
+      )}
+
+      <ul className="space-y-4">
+        {produits?.map((produit) => (
+          <li
+            key={produit.id}
+            className="flex items-center gap-4 border-b border-ink/10 pb-4"
+          >
+            <div className="w-16 h-16 rounded-lg bg-accent/10 relative overflow-hidden shrink-0">
+              {produit.image_url && (
+                <Image
+                  src={produit.image_url}
+                  alt={produit.titre ?? "Produit"}
+                  fill
+                  sizes="64px"
+                  className="object-cover"
+                />
+              )}
+            </div>
+            <div className="flex-1">
+              <Link
+                href={`/produits/${produit.id}`}
+                className="font-medium hover:text-accent transition-colors"
+              >
+                {produit.titre ?? "Produit sans titre"}
+              </Link>
+              <p className="text-sm text-ink/50">
+                ♡ {produit.likes?.[0]?.count ?? 0}
+              </p>
+            </div>
+            <form action={supprimerProduit.bind(null, produit.id)}>
+              <button
+                type="submit"
+                className="text-sm text-danger hover:underline underline-offset-4"
+              >
+                Supprimer
+              </button>
+            </form>
+          </li>
+        ))}
+      </ul>
+    </main>
   );
 }
