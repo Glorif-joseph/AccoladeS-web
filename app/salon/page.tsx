@@ -25,7 +25,7 @@ export default async function Salon() {
 
   const { data } = await supabase
     .from("messages_groupe")
-    .select("id, expediteur_id, contenu, created_at")
+    .select("id, expediteur_id, contenu, created_at, image_url")
     .order("created_at", { ascending: true })
     .limit(100);
 

@@ -4,11 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import EmojiPicker from "./EmojiPicker";
 
+const BUCKET = "messages";
+const TAILLE_MAX = 5 * 1024 * 1024; // 5 Mo
+
 type Message = {
   id: string;
   expediteur_id: string;
   contenu: string;
   created_at: string;
+  image_url?: string | null;
   pseudoExpediteur?: string;
   photoExpediteur?: string | null;
   statutExpediteur?: string | null;
@@ -17,6 +21,15 @@ type Message = {
 // "Ambassadeur" (ou "Ambassadrice"), quelle que soit la casse.
 function estAmbassadeur(statut?: string | null) {
   return !!statut && statut.trim().toLowerCase().startsWith("ambassad");
+}
+
+// Retrouve le chemin d'un fichier dans le bucket à partir de son adresse
+// publique (pour supprimer l'image avec le message).
+function cheminDansBucket(url: string) {
+  const repere = `/object/public/${BUCKET}/`;
+  const i = url.indexOf(repere);
+  if (i === -1) return null;
+  return decodeURIComponent(url.slice(i + repere.length).split("?")[0]);
 }
 
 export default function SalonChat({
@@ -28,12 +41,23 @@ export default function SalonChat({
 }) {
   const [messages, setMessages] = useState<Message[]>(messagesInitiaux);
   const [texte, setTexte] = useState("");
+  const [image, setImage] = useState<File | null>(null);
+  const [apercu, setApercu] = useState<string | null>(null);
+  const [envoi, setEnvoi] = useState(false);
   const finListe = useRef<HTMLDivElement>(null);
   const champTexte = useRef<HTMLTextAreaElement>(null);
+  const champFichier = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     finListe.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
+
+  // Libère l'aperçu local quand on change d'image ou qu'on quitte la page.
+  useEffect(() => {
+    return () => {
+      if (apercu) URL.revokeObjectURL(apercu);
+    };
+  }, [apercu]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -89,22 +113,76 @@ export default function SalonChat({
     });
   }
 
+  function choisirImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const fichier = e.target.files?.[0];
+    e.target.value = "";
+    if (!fichier) return;
+
+    if (!fichier.type.startsWith("image/")) {
+      alert("Choisis une image.");
+      return;
+    }
+    if (fichier.size > TAILLE_MAX) {
+      alert("L'image est trop lourde (5 Mo maximum).");
+      return;
+    }
+
+    setImage(fichier);
+    setApercu(URL.createObjectURL(fichier));
+  }
+
+  function retirerImage() {
+    setImage(null);
+    setApercu(null);
+  }
+
   async function envoyer() {
-    if (!texte.trim() || !utilisateurId) return;
+    if ((!texte.trim() && !image) || !utilisateurId || envoi) return;
+
     const contenu = texte.trim();
+    const fichier = image;
     setTexte("");
+    setImage(null);
+    setApercu(null);
+    setEnvoi(true);
 
     const supabase = createClient();
+    let imageUrl: string | null = null;
+
+    if (fichier) {
+      const extension = fichier.name.split(".").pop() || "jpg";
+      const chemin = `${utilisateurId}/salon-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}.${extension}`;
+
+      const { error: erreurEnvoi } = await supabase.storage
+        .from(BUCKET)
+        .upload(chemin, fichier, { contentType: fichier.type });
+
+      if (erreurEnvoi) {
+        // On remet le message tel quel pour pouvoir réessayer.
+        alert(`Erreur d'envoi de l'image : ${erreurEnvoi.message}`);
+        setTexte(contenu);
+        setImage(fichier);
+        setApercu(URL.createObjectURL(fichier));
+        setEnvoi(false);
+        return;
+      }
+
+      imageUrl = supabase.storage.from(BUCKET).getPublicUrl(chemin).data.publicUrl;
+    }
+
     const { error } = await supabase
       .from("messages_groupe")
-      .insert({ expediteur_id: utilisateurId, contenu });
+      .insert({ expediteur_id: utilisateurId, contenu, image_url: imageUrl });
 
     if (error) alert(error.message);
+    setEnvoi(false);
   }
 
   // Supprime un de TES messages : retrait immédiat à l'écran, puis
-  // suppression en base. Si la base refuse (ou ne supprime rien), le message
-  // revient à sa place avec un message d'erreur.
+  // suppression en base (et de l'image associée). Si la base refuse (ou ne
+  // supprime rien), le message revient à sa place avec un message d'erreur.
   async function supprimer(message: Message) {
     if (!utilisateurId || message.expediteur_id !== utilisateurId) return;
     if (!confirm("Supprimer ce message ?")) return;
@@ -126,6 +204,12 @@ export default function SalonChat({
           : [...prev, message].sort((a, b) => (a.created_at < b.created_at ? -1 : 1))
       );
       alert(error?.message ?? "Impossible de supprimer ce message.");
+      return;
+    }
+
+    if (message.image_url) {
+      const chemin = cheminDansBucket(message.image_url);
+      if (chemin) await supabase.storage.from(BUCKET).remove([chemin]);
     }
   }
 
@@ -182,7 +266,27 @@ export default function SalonChat({
                     )}
                   </p>
                 )}
-                <p className="text-sm whitespace-pre-wrap break-words">{m.contenu}</p>
+
+                {m.image_url && (
+                  <a
+                    href={m.image_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`block ${m.contenu ? "mb-1.5" : ""}`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={m.image_url}
+                      alt="Image envoyée"
+                      loading="lazy"
+                      className="w-60 max-w-full h-auto max-h-72 rounded-xl object-cover"
+                    />
+                  </a>
+                )}
+
+                {m.contenu && (
+                  <p className="text-sm whitespace-pre-wrap break-words">{m.contenu}</p>
+                )}
               </div>
             </div>
           );
@@ -190,29 +294,66 @@ export default function SalonChat({
         <div ref={finListe} />
       </div>
 
-      <div className="flex items-end gap-1 p-2.5 border-t border-surface-border shrink-0">
-        <EmojiPicker onChoisir={insererEmoji} />
-        <textarea
-          ref={champTexte}
-          value={texte}
-          onChange={(e) => setTexte(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              envoyer();
-            }
-          }}
-          placeholder="Écrire dans le salon..."
-          rows={1}
-          className="flex-1 border border-surface-border rounded-[20px] px-3.5 py-2.5 text-sm outline-none focus:border-accent resize-none max-h-24"
-        />
-        <button
-          onClick={envoyer}
-          className="w-10 h-10 rounded-full bg-anthracite text-paper flex items-center justify-center shrink-0 ml-1"
-          aria-label="Envoyer"
-        >
-          ➤
-        </button>
+      <div className="border-t border-surface-border shrink-0">
+        {apercu && (
+          <div className="px-3 pt-3 flex">
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={apercu} alt="Aperçu" className="h-20 w-20 rounded-xl object-cover" />
+              <button
+                type="button"
+                onClick={retirerImage}
+                aria-label="Retirer l'image"
+                className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-anthracite text-paper text-xs flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-end gap-1 p-2.5">
+          <EmojiPicker onChoisir={insererEmoji} />
+
+          <input
+            ref={champFichier}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={choisirImage}
+          />
+          <button
+            type="button"
+            onClick={() => champFichier.current?.click()}
+            aria-label="Joindre une image"
+            className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xl hover:bg-surface transition-colors"
+          >
+            📷
+          </button>
+
+          <textarea
+            ref={champTexte}
+            value={texte}
+            onChange={(e) => setTexte(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                envoyer();
+              }
+            }}
+            placeholder="Écrire dans le salon..."
+            rows={1}
+            className="flex-1 min-w-0 border border-surface-border rounded-[20px] px-3.5 py-2.5 text-sm outline-none focus:border-accent resize-none max-h-24"
+          />
+          <button
+            onClick={envoyer}
+            disabled={envoi}
+            className="w-10 h-10 rounded-full bg-anthracite text-paper flex items-center justify-center shrink-0 ml-1 disabled:opacity-60"
+            aria-label="Envoyer"
+          >
+            {envoi ? "…" : "➤"}
+          </button>
+        </div>
       </div>
     </div>
   );
