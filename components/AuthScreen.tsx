@@ -1,194 +1,296 @@
-"use server";
+"use client";
 
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import type { User } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
+import { useEffect, useState, useTransition } from "react";
+import {
+  renvoyerCode,
+  seConnecter,
+  sInscrire,
+  verifierCode,
+} from "@/app/(auth)/actions";
 
-type ClientServeur = Awaited<ReturnType<typeof createClient>>;
+const DELAI_RENVOI = 60; // secondes avant de pouvoir redemander un code
 
-// Messages d'erreur Supabase (en anglais) -> français.
-function traduireErreur(message: string) {
-  const m = message.toLowerCase();
+export default function AuthScreen({
+  redirectVers,
+  erreur,
+  modeInitial = "connexion",
+}: {
+  redirectVers: string;
+  erreur?: string;
+  modeInitial?: "connexion" | "inscription";
+}) {
+  const [mode, setMode] = useState<"connexion" | "inscription">(modeInitial);
+  const [etape, setEtape] = useState<"formulaire" | "code">("formulaire");
+  const [emailCode, setEmailCode] = useState("");
+  const [code, setCode] = useState("");
+  const [erreurLocale, setErreurLocale] = useState<string | null>(null);
+  const [infoLocale, setInfoLocale] = useState<string | null>(null);
+  const [attente, setAttente] = useState(0);
+  const [enCours, startTransition] = useTransition();
 
-  if (m.includes("user already registered"))
-    return "Cette adresse e-mail est déjà utilisée. Connecte-toi.";
-  if (m.includes("password should be at least"))
-    return "Le mot de passe est trop court (6 caractères minimum).";
-  if (m.includes("invalid login credentials"))
-    return "E-mail ou mot de passe incorrect.";
-  if (m.includes("email not confirmed"))
-    return "Ton adresse e-mail n'est pas encore confirmée.";
-  if (m.includes("unable to validate email") || m.includes("invalid format"))
-    return "Adresse e-mail invalide.";
-  if (m.includes("token") && (m.includes("expired") || m.includes("invalid")))
-    return "Code invalide ou expiré. Demande un nouveau code.";
-  if (m.includes("rate limit") || m.includes("for security purposes"))
-    return "Trop de tentatives. Patiente un peu avant de réessayer.";
+  // Compte à rebours avant de pouvoir renvoyer un code.
+  useEffect(() => {
+    if (attente <= 0) return;
+    const t = setTimeout(() => setAttente((a) => a - 1), 1000);
+    return () => clearTimeout(t);
+  }, [attente]);
 
-  return message;
-}
-
-// Crée la ligne `profiles` et applique le code promo. Appelée UNE FOIS le
-// compte confirmé (session active) : avant, la base refuserait l'insertion
-// car il n'y a pas encore d'utilisateur connecté. Le pseudo et le code promo
-// ont été gardés dans les informations du compte au moment de l'inscription.
-//
-// Pas de trigger `handle_new_user` détecté côté base : la ligne `profiles`
-// n'est PAS créée automatiquement. On réplique donc ici ce que fait l'app
-// mobile après un signUp. Si l'app crée la ligne différemment (autres
-// colonnes, valeurs par défaut), aligne cette insertion sur son code exact.
-async function finaliserInscription(supabase: ClientServeur, user: User) {
-  const meta = (user.user_metadata ?? {}) as { pseudo?: string; code_promo?: string };
-  const pseudo = (meta.pseudo ?? "").trim();
-  const codePromo = (meta.code_promo ?? "").trim();
-
-  const { data: existant } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (existant) return { pseudo, erreur: null as string | null };
-
-  const { error: erreurProfil } = await supabase.from("profiles").insert({
-    id: user.id,
-    pseudo,
-    email: user.email ?? "",
-  });
-
-  if (erreurProfil) {
-    return {
-      pseudo,
-      erreur: `Ton e-mail est confirmé, mais la création du profil a échoué : ${erreurProfil.message}`,
-    };
+  function passerAuCode(email: string, info?: string) {
+    setEmailCode(email);
+    setCode("");
+    setInfoLocale(info ?? null);
+    setAttente(DELAI_RENVOI);
+    setEtape("code");
   }
 
-  // Comme dans index.tsx : un code promo invalide ne bloque pas
-  // l'inscription, juste un avertissement silencieux.
-  if (codePromo) {
-    const { error: erreurPromo } = await supabase.rpc("appliquer_code_promo", {
-      p_nouveau_id: user.id,
-      p_code: codePromo,
+  function soumettre(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setErreurLocale(null);
+    setInfoLocale(null);
+
+    const formData = new FormData(e.currentTarget);
+    const email = ((formData.get("email") as string) ?? "").trim();
+
+    startTransition(async () => {
+      if (mode === "inscription") {
+        const res = await sInscrire(formData);
+        if ("erreur" in res) {
+          setErreurLocale(res.erreur);
+          return;
+        }
+        passerAuCode(res.email);
+        return;
+      }
+
+      const res = await seConnecter(formData);
+
+      // Compte créé mais jamais confirmé : on renvoie un code et on
+      // ouvre directement l'écran de saisie.
+      if (res.nonConfirme) {
+        const envoi = await renvoyerCode(email);
+        if ("erreur" in envoi) {
+          setErreurLocale(envoi.erreur);
+          return;
+        }
+        passerAuCode(
+          email,
+          "Ton adresse e-mail n'était pas encore confirmée : un code vient de t'être envoyé."
+        );
+        return;
+      }
+
+      setErreurLocale(res.erreur);
     });
-    if (erreurPromo) {
-      console.warn("Code promo non appliqué :", erreurPromo.message);
-    }
   }
 
-  return { pseudo, erreur: null as string | null };
-}
+  function soumettreCode(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setErreurLocale(null);
+    setInfoLocale(null);
 
-// Retourne une erreur à afficher, ou `nonConfirme` si l'adresse e-mail attend
-// encore son code (l'écran propose alors d'en renvoyer un).
-export async function seConnecter(
-  formData: FormData
-): Promise<{ erreur: string; nonConfirme?: boolean }> {
-  const supabase = await createClient();
+    const formData = new FormData();
+    formData.set("email", emailCode);
+    formData.set("code", code);
 
-  const email = ((formData.get("email") as string) ?? "").trim();
-  const password = formData.get("password") as string;
-
-  const redirectVers = (formData.get("redirect") as string) || "/produits";
-
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-  if (error) {
-    return {
-      erreur: traduireErreur(error.message),
-      nonConfirme: error.message.toLowerCase().includes("email not confirmed"),
-    };
+    startTransition(async () => {
+      // En cas de succès, l'action redirige vers la page de bienvenue.
+      const res = await verifierCode(formData);
+      setErreurLocale(res.erreur);
+    });
   }
 
-  revalidatePath("/", "layout");
-  redirect(redirectVers);
-}
+  function renvoyer() {
+    if (attente > 0 || enCours) return;
+    setErreurLocale(null);
+    setInfoLocale(null);
 
-// Étape 1 : crée le compte et envoie le code par e-mail.
-// Retourne { etape: "code", email } pour afficher l'écran de saisie du code.
-export async function sInscrire(
-  formData: FormData
-): Promise<{ erreur: string } | { etape: "code"; email: string }> {
-  const supabase = await createClient();
-
-  const email = ((formData.get("email") as string) ?? "").trim();
-  const password = formData.get("password") as string;
-  const pseudo = ((formData.get("pseudo") as string) ?? "").trim();
-  const codePromo = ((formData.get("codePromo") as string) ?? "").trim();
-
-  if (!pseudo) return { erreur: "Le pseudo est obligatoire." };
-
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { pseudo, code_promo: codePromo } },
-  });
-
-  if (error) return { erreur: traduireErreur(error.message) };
-
-  // Adresse déjà utilisée par un compte confirmé : Supabase ne renvoie pas
-  // d'erreur, mais un utilisateur sans aucune identité.
-  if (data.user && data.user.identities && data.user.identities.length === 0) {
-    return { erreur: "Cette adresse e-mail est déjà utilisée. Connecte-toi." };
+    startTransition(async () => {
+      const res = await renvoyerCode(emailCode);
+      if ("erreur" in res) {
+        setErreurLocale(res.erreur);
+        return;
+      }
+      setInfoLocale("Un nouveau code vient d'être envoyé.");
+      setAttente(DELAI_RENVOI);
+    });
   }
 
-  // Confirmation par e-mail désactivée côté Supabase : la session existe déjà,
-  // on garde l'ancien comportement (profil + bienvenue).
-  if (data.session && data.user) {
-    const resultat = await finaliserInscription(supabase, data.user);
-    if (resultat.erreur) return { erreur: resultat.erreur };
-
-    revalidatePath("/", "layout");
-    redirect(`/bienvenue?pseudo=${encodeURIComponent(resultat.pseudo)}`);
+  function revenirAuFormulaire() {
+    setEtape("formulaire");
+    setCode("");
+    setErreurLocale(null);
+    setInfoLocale(null);
   }
 
-  // Confirmation activée : un code vient d'être envoyé par e-mail.
-  return { etape: "code", email };
-}
+  const erreurAffichee = erreurLocale ?? erreur;
 
-// Étape 2 : vérifie le code reçu. Si c'est bon, le compte est confirmé et
-// connecté, le profil est créé, puis redirection vers la page de bienvenue.
-export async function verifierCode(formData: FormData): Promise<{ erreur: string }> {
-  const email = ((formData.get("email") as string) ?? "").trim();
-  const code = ((formData.get("code") as string) ?? "").replace(/\s/g, "");
+  const classeChamp =
+    "w-full bg-gris-fonce border border-bordure rounded-[10px] p-3.5 text-paper text-sm placeholder:text-[#8A8A8E] outline-none focus:border-accent";
 
-  if (!/^\d{6,10}$/.test(code)) {
-    return { erreur: "Entre le code à 6 chiffres reçu par e-mail." };
+  // ---------- Écran : saisie du code reçu par e-mail ----------
+  if (etape === "code") {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-anthracite p-6">
+        <div className="w-full max-w-sm">
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-14 h-14 rounded-[14px] bg-black border-[1.5px] border-accent flex items-center justify-center mb-3">
+              <span className="text-paper text-xl font-medium">AS</span>
+            </div>
+            <h1 className="text-paper text-xl font-medium">Vérifie ton e-mail</h1>
+            <p className="text-[#A9A29A] text-[13px] mt-1 text-center">
+              Nous avons envoyé un code de confirmation à
+              <br />
+              <span className="text-paper">{emailCode}</span>
+            </p>
+          </div>
+
+          {infoLocale && (
+            <p className="mb-4 text-sm text-accent border border-accent/30 rounded-lg px-4 py-3">
+              {infoLocale}
+            </p>
+          )}
+
+          {erreurLocale && (
+            <p className="mb-4 text-sm text-danger border border-danger/30 rounded-lg px-4 py-3">
+              {erreurLocale}
+            </p>
+          )}
+
+          <form onSubmit={soumettreCode} className="space-y-3">
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={10}
+              placeholder="Code"
+              aria-label="Code de confirmation"
+              required
+              autoFocus
+              className={`${classeChamp} text-center text-2xl tracking-[0.4em]`}
+            />
+
+            <button
+              type="submit"
+              disabled={enCours || code.length < 6}
+              className="w-full bg-accent rounded-full py-3.5 flex items-center justify-center gap-2 text-accent-ink font-medium text-sm mt-2 disabled:opacity-60"
+            >
+              {enCours ? "Vérification..." : "Valider le code"}
+            </button>
+          </form>
+
+          <button
+            type="button"
+            onClick={renvoyer}
+            disabled={attente > 0 || enCours}
+            className="w-full text-center mt-5 text-[13px] text-accent disabled:text-[#A9A29A]"
+          >
+            {attente > 0 ? `Renvoyer le code (${attente} s)` : "Renvoyer le code"}
+          </button>
+
+          <button
+            type="button"
+            onClick={revenirAuFormulaire}
+            className="w-full text-center mt-3 text-[13px] text-[#A9A29A]"
+          >
+            Modifier mon adresse e-mail
+          </button>
+        </div>
+      </main>
+    );
   }
 
-  const supabase = await createClient();
+  // ---------- Écran : connexion / inscription ----------
+  return (
+    <main className="min-h-screen flex items-center justify-center bg-anthracite p-6">
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-14 h-14 rounded-[14px] bg-black border-[1.5px] border-accent flex items-center justify-center mb-3">
+            <span className="text-paper text-xl font-medium">AS</span>
+          </div>
+          <h1 className="text-paper text-xl font-medium">
+            {mode === "inscription" ? "Créer un compte" : "Connexion"}
+          </h1>
+          <p className="text-[#A9A29A] text-[13px] mt-1">
+            Bienvenue dans la communauté
+          </p>
+        </div>
 
-  const { data, error } = await supabase.auth.verifyOtp({
-    email,
-    token: code,
-    type: "signup",
-  });
+        {erreurAffichee && (
+          <p className="mb-4 text-sm text-danger border border-danger/30 rounded-lg px-4 py-3">
+            {erreurAffichee}
+          </p>
+        )}
 
-  if (error || !data.user) {
-    return { erreur: traduireErreur(error?.message ?? "Code invalide ou expiré.") };
-  }
+        <form onSubmit={soumettre} className="space-y-3">
+          <input type="hidden" name="redirect" value={redirectVers} />
 
-  const resultat = await finaliserInscription(supabase, data.user);
-  if (resultat.erreur) return { erreur: resultat.erreur };
+          {mode === "inscription" && (
+            <input
+              name="pseudo"
+              placeholder="Pseudo"
+              required
+              autoCapitalize="none"
+              className={classeChamp}
+            />
+          )}
 
-  revalidatePath("/", "layout");
-  redirect(`/bienvenue?pseudo=${encodeURIComponent(resultat.pseudo)}`);
-}
+          <input
+            type="email"
+            name="email"
+            placeholder="Email"
+            required
+            autoCapitalize="none"
+            autoComplete="email"
+            className={classeChamp}
+          />
 
-export async function renvoyerCode(
-  email: string
-): Promise<{ ok: true } | { erreur: string }> {
-  const supabase = await createClient();
+          <input
+            type="password"
+            name="password"
+            placeholder="Mot de passe"
+            required
+            autoComplete={mode === "inscription" ? "new-password" : "current-password"}
+            className={classeChamp}
+          />
 
-  const { error } = await supabase.auth.resend({ type: "signup", email });
+          {mode === "inscription" && (
+            <input
+              name="codePromo"
+              placeholder="Code promo (optionnel)"
+              autoCapitalize="characters"
+              className={classeChamp}
+            />
+          )}
 
-  if (error) return { erreur: traduireErreur(error.message) };
-  return { ok: true };
-}
+          <button
+            type="submit"
+            disabled={enCours}
+            className="w-full bg-accent rounded-full py-3.5 flex items-center justify-center gap-2 text-accent-ink font-medium text-sm mt-2 disabled:opacity-60"
+          >
+            {enCours
+              ? "Patiente..."
+              : mode === "inscription"
+              ? "S'inscrire"
+              : "Se connecter"}
+            {!enCours && <span aria-hidden="true">→</span>}
+          </button>
+        </form>
 
-export async function seDeconnecter() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
-  revalidatePath("/", "layout");
-  redirect("/");
+        <button
+          type="button"
+          onClick={() => {
+            setMode(mode === "inscription" ? "connexion" : "inscription");
+            setErreurLocale(null);
+          }}
+          className="w-full text-center mt-5 text-[13px] text-[#A9A29A]"
+        >
+          {mode === "inscription" ? "Déjà un compte ? " : "Pas de compte ? "}
+          <span className="text-accent">
+            {mode === "inscription" ? "Se connecter" : "S'inscrire"}
+          </span>
+        </button>
+      </div>
+    </main>
+  );
 }
