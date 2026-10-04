@@ -33,11 +33,25 @@ export default async function SiteHeader() {
           .select("id", { count: "exact", head: true })
           .eq("destinataire_id", user.id)
           .eq("lu", false),
-        supabase.from("profiles").select("photo_url").eq("id", user.id).single(),
+        supabase
+          .from("profiles")
+          .select("photo_url, derniere_visite_salon")
+          .eq("id", user.id)
+          .single(),
       ]);
 
+    // Nouveaux messages du Salon général depuis ta dernière visite, hors les
+    // tiens : même règle que la page Messages, pour que les deux chiffres
+    // restent cohérents.
+    const depuisSalon = profil?.derniere_visite_salon ?? "1970-01-01T00:00:00Z";
+    const { count: countSalon } = await supabase
+      .from("messages_groupe")
+      .select("id", { count: "exact", head: true })
+      .gt("created_at", depuisSalon)
+      .neq("expediteur_id", user.id);
+
     nonLues = countNotifs ?? 0;
-    nonLusMessages = countMessages ?? 0;
+    nonLusMessages = (countMessages ?? 0) + (countSalon ?? 0);
     photoUrl = profil?.photo_url ?? null;
   }
 

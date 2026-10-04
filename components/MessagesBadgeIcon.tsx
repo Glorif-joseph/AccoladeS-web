@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { MdMessage } from "react-icons/md";
 import { createClient } from "@/lib/supabase/client";
 
@@ -16,23 +17,50 @@ export default function MessagesBadgeIcon({
 }) {
   const [nonLus, setNonLus] = useState(nonLusInitial);
 
+  // Quand tu es dans le Salon, tu lis les messages en direct : ils ne doivent
+  // pas faire monter le badge.
+  const pathname = usePathname();
+  const surSalon = useRef(false);
+  surSalon.current = pathname?.startsWith("/salon") ?? false;
+
   useEffect(() => {
     const supabase = createClient();
 
+    // Total = messages privés non lus + nouveaux messages du Salon depuis ta
+    // dernière visite (hors les tiens). Même règle que SiteHeader et que la
+    // page Messages.
     async function rafraichir() {
-      const { count } = await supabase
-        .from("messages_prives")
-        .select("id", { count: "exact", head: true })
-        .eq("destinataire_id", utilisateurId)
-        .eq("lu", false);
+      const [{ count: prives }, { data: profil }] = await Promise.all([
+        supabase
+          .from("messages_prives")
+          .select("id", { count: "exact", head: true })
+          .eq("destinataire_id", utilisateurId)
+          .eq("lu", false),
+        supabase
+          .from("profiles")
+          .select("derniere_visite_salon")
+          .eq("id", utilisateurId)
+          .single(),
+      ]);
 
-      if (typeof count === "number") setNonLus(count);
+      let salon = 0;
+      if (!surSalon.current) {
+        const depuis = profil?.derniere_visite_salon ?? "1970-01-01T00:00:00Z";
+        const { count } = await supabase
+          .from("messages_groupe")
+          .select("id", { count: "exact", head: true })
+          .gt("created_at", depuis)
+          .neq("expediteur_id", utilisateurId);
+        salon = count ?? 0;
+      }
+
+      setNonLus((prives ?? 0) + salon);
     }
 
     // messages_prives est dans la publication supabase_realtime depuis le
     // départ (contrairement à notifications, qui a dû y être ajoutée).
     const channel = supabase
-      .channel(`messages-prives-${utilisateurId}`)
+      .channel(`messages-badge-${utilisateurId}`)
       .on(
         "postgres_changes",
         {
@@ -41,6 +69,36 @@ export default function MessagesBadgeIcon({
           table: "messages_prives",
           filter: `destinataire_id=eq.${utilisateurId}`,
         },
+        rafraichir
+      )
+      // Nouveau message dans le Salon (écrit par quelqu'un d'autre).
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages_groupe",
+          filter: `expediteur_id=neq.${utilisateurId}`,
+        },
+        async () => {
+          if (surSalon.current) {
+            // Tu es dans le Salon : le message est lu en direct, on avance
+            // la date de dernière visite pour qu'il ne soit pas compté
+            // comme non lu en quittant la page.
+            await supabase
+              .from("profiles")
+              .update({ derniere_visite_salon: new Date().toISOString() })
+              .eq("id", utilisateurId);
+            return;
+          }
+          rafraichir();
+        }
+      )
+      // Un message du Salon supprimé doit aussi baisser le compteur
+      // (Supabase n'accepte pas de filtre sur les suppressions).
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "messages_groupe" },
         rafraichir
       )
       .subscribe();
