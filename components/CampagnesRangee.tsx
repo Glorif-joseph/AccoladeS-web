@@ -2,8 +2,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 
-// Page de création de campagne : À ADAPTER si ton adresse est différente.
-const ROUTE_CREER_CAMPAGNE = "/campagnes/nouvelle";
+// Page de création de campagne déjà présente sur le site (vue dans la liste
+// des routes du build).
+const ROUTE_CREER_CAMPAGNE = "/compte/campagnes/nouveau";
 
 // Rangée horizontale scrollable de vignettes, comme sur l'app : la carte
 // "Créer" (pointillés + turquoise) vient en premier, suivie des campagnes.
@@ -13,9 +14,14 @@ export default async function CampagnesRangee() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Une campagne disparaît dès que sa date de fin est dépassée, la tienne
+  // comme celles des autres. Le filtre est explicite : sans lui, rien
+  // n'empêche l'affichage de campagnes terminées (et l'ordre par date de fin
+  // croissante mettrait les plus anciennes en premier).
   const { data: campagnes } = await supabase
     .from("campagnes")
     .select("id, titre, prix, media_url, media_type, date_fin")
+    .gt("date_fin", new Date().toISOString())
     .order("date_fin", { ascending: true })
     .limit(10);
 
