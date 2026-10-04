@@ -1,83 +1,171 @@
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
+import SiteHeader from "@/components/SiteHeader";
 
-// Page de création de campagne déjà présente sur le site (vue dans la liste
+export const revalidate = 0;
+
+// Page de création d'un pulse déjà présente sur le site (vue dans la liste
 // des routes du build).
-const ROUTE_CREER_CAMPAGNE = "/compte/campagnes/nouveau";
+const ROUTE_CREER_PULSE = "/compte/pulses/nouveau";
 
-// Rangée horizontale scrollable de vignettes, comme sur l'app : la carte
-// "Créer" (pointillés + turquoise) vient en premier, suivie des campagnes.
-export default async function CampagnesRangee() {
+type GroupePulse = {
+  profileId: string;
+  pseudo: string;
+  photo: string | null;
+  toutVu: boolean;
+  estSuivi: boolean;
+  dernierPulseAt: string;
+};
+
+// Première photo d'avatar du membre, sinon sa photo de profil.
+function premierePhoto(photosAvatar: string[] | null | undefined, photoUrl: string | null | undefined) {
+  return photosAvatar?.length ? photosAvatar[0] : photoUrl ?? null;
+}
+
+function Avatar({ photo, pseudo }: { photo: string | null; pseudo: string }) {
+  return photo ? (
+    <Image src={photo} alt={pseudo} fill sizes="72px" className="object-cover" />
+  ) : (
+    <div className="w-full h-full flex items-center justify-center bg-accent/10 font-display text-accent">
+      {pseudo[0]?.toUpperCase()}
+    </div>
+  );
+}
+
+export default async function Pulses() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Une campagne disparaît dès que sa date de fin est dépassée, la tienne
-  // comme celles des autres. Le filtre est explicite : sans lui, rien
-  // n'empêche l'affichage de campagnes terminées (et l'ordre par date de fin
-  // croissante mettrait les plus anciennes en premier).
-  const { data: campagnes } = await supabase
-    .from("campagnes")
-    .select("id, titre, prix, media_url, media_type, date_fin")
-    .gt("date_fin", new Date().toISOString())
-    .order("date_fin", { ascending: true })
-    .limit(10);
+  // Même règle que l'app : on ne garde que les pulses dont `expires_at` est
+  // dans le futur (24 h). Le filtre est explicite : la policy RLS ne suffit
+  // pas si une autre policy laisse l'auteur voir ses propres pulses expirés.
+  const { data: pulses } = await supabase
+    .from("pulses")
+    .select("id, profile_id, created_at, profiles ( pseudo, photo_url, photos_avatar )")
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false });
 
-  // Non connecté : on passe par la connexion, puis on revient à la création.
-  const hrefCreer = user
-    ? ROUTE_CREER_CAMPAGNE
-    : `/connexion?redirect=${ROUTE_CREER_CAMPAGNE}`;
+  const idsPulses = (pulses ?? []).map((p) => p.id);
 
+  let idsSuivis = new Set<string>();
+  let idsVus = new Set<string>();
+  let maPhoto: string | null = null;
+
+  if (user) {
+    const [{ data: suivisData }, { data: vuesData }, { data: monProfil }] = await Promise.all([
+      supabase.from("followers").select("suivi_id").eq("follower_id", user.id),
+      supabase
+        .from("pulse_vues")
+        .select("pulse_id")
+        .eq("viewer_id", user.id)
+        .in("pulse_id", idsPulses.length ? idsPulses : [""]),
+      supabase.from("profiles").select("photo_url, photos_avatar").eq("id", user.id).single(),
+    ]);
+
+    idsSuivis = new Set((suivisData ?? []).map((s) => s.suivi_id as string));
+    idsVus = new Set((vuesData ?? []).map((v) => v.pulse_id as string));
+    maPhoto = premierePhoto(monProfil?.photos_avatar, monProfil?.photo_url);
+  }
+
+  const jAiUnPulseActif = !!user && (pulses ?? []).some((p) => p.profile_id === user.id);
+
+  const parProfil: Record<string, GroupePulse> = {};
+  for (const p of pulses ?? []) {
+    const auteur = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
+    const pid = p.profile_id as string;
+
+    if (!parProfil[pid]) {
+      parProfil[pid] = {
+        profileId: pid,
+        pseudo: auteur?.pseudo ?? "Membre AccoladeS",
+        photo: premierePhoto(auteur?.photos_avatar, auteur?.photo_url),
+        toutVu: true,
+        estSuivi: idsSuivis.has(pid),
+        dernierPulseAt: p.created_at,
+      };
+    }
+    if (!idsVus.has(p.id)) parProfil[pid].toutVu = false;
+    if (p.created_at > parProfil[pid].dernierPulseAt) parProfil[pid].dernierPulseAt = p.created_at;
+  }
+
+  // Ton propre pulse n'est pas dans la liste : il a sa propre vignette
+  // "Mon Pulse" en première position, comme dans l'app.
+  const autres = Object.values(parProfil)
+    .filter((g) => g.profileId !== user?.id)
+    .sort((a, b) => {
+      if (a.estSuivi !== b.estSuivi) return a.estSuivi ? -1 : 1;
+      if (a.toutVu !== b.toutVu) return a.toutVu ? 1 : -1;
+      return b.dernierPulseAt.localeCompare(a.dernierPulseAt);
+    });
+
+  // Plein écran : plus de conteneur max-w-6xl centré. Le SiteHeader est sorti
+  // du <main> pour s'étendre sur toute la largeur.
   return (
-    <section className="mb-6">
-      <h2 className="text-lg font-bold mb-3">Campagnes</h2>
+    <div className="w-full min-h-screen bg-paper flex flex-col">
+      <SiteHeader />
 
-      {/* -mx-4 px-4 : la rangée défile jusqu'au bord de l'écran
-          (la page a un px-4) */}
-      <div className="-mx-4 px-4 overflow-x-auto pb-1">
-        <div className="flex gap-3 w-max">
-          <Link
-            href={hrefCreer}
-            className="w-28 h-44 shrink-0 rounded-2xl border-2 border-dashed border-ink/15 flex flex-col items-center justify-center gap-2"
-          >
-            <span aria-hidden="true" className="text-4xl font-light leading-none text-accent">
-              +
-            </span>
-            <span className="text-[13px] font-semibold">Créer</span>
-          </Link>
+      <main className="flex-1 px-4 pt-6 pb-24">
+        <h1 className="font-display text-3xl mb-1">Pulses</h1>
+        <p className="text-ink/60 mb-6">Visibles 24h, publiés par les membres actifs.</p>
 
-          {(campagnes ?? []).map((c) => (
+        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-x-3 gap-y-5">
+          {/* Mon Pulse */}
+          {user && (
             <Link
-              key={c.id}
-              href={`/campagnes/${c.id}`}
-              className="relative w-28 h-44 shrink-0 rounded-2xl overflow-hidden bg-anthracite"
+              href={jAiUnPulseActif ? `/pulses/${user.id}` : ROUTE_CREER_PULSE}
+              className="flex flex-col items-center gap-2"
             >
-              {c.media_type === "video" ? (
-                <video
-                  src={c.media_url}
-                  muted
-                  playsInline
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
+              {jAiUnPulseActif ? (
+                <div className="relative w-[72px] h-[72px]">
+                  <div className="w-full h-full rounded-full p-[3px] bg-accent">
+                    <div className="w-full h-full rounded-full overflow-hidden relative bg-paper border-2 border-paper">
+                      <Avatar photo={maPhoto} pseudo="Moi" />
+                    </div>
+                  </div>
+                  <span
+                    aria-hidden="true"
+                    className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-accent text-accent-ink border-2 border-paper flex items-center justify-center text-xs font-black leading-none"
+                  >
+                    +
+                  </span>
+                </div>
               ) : (
-                <Image
-                  src={c.media_url}
-                  alt={c.titre}
-                  fill
-                  sizes="112px"
-                  className="object-cover"
-                />
+                <div className="w-[72px] h-[72px] rounded-full border-2 border-dashed border-ink/15 flex items-center justify-center text-3xl font-light text-accent">
+                  +
+                </div>
               )}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-2 pt-6">
-                <p className="text-xs font-semibold text-white truncate">{c.titre}</p>
-                <p className="text-xs font-bold text-accent">{c.prix} $</p>
+              <span className="text-sm w-full text-center truncate">Mon Pulse</span>
+            </Link>
+          )}
+
+          {/* Pulses des autres membres */}
+          {autres.map((g) => (
+            <Link
+              key={g.profileId}
+              href={`/pulses/${g.profileId}`}
+              className="flex flex-col items-center gap-2 group"
+            >
+              <div
+                className={`w-[72px] h-[72px] rounded-full p-[3px] ${
+                  g.toutVu ? "bg-[#DDDDDD]" : "bg-accent"
+                }`}
+              >
+                <div className="w-full h-full rounded-full overflow-hidden relative bg-paper border-2 border-paper">
+                  <Avatar photo={g.photo} pseudo={g.pseudo} />
+                </div>
               </div>
+              <span className="text-sm w-full text-center truncate">{g.pseudo}</span>
             </Link>
           ))}
         </div>
-      </div>
-    </section>
+
+        {autres.length === 0 && (
+          <p className="text-ink/50 mt-8">Aucun pulse actif pour l&rsquo;instant.</p>
+        )}
+      </main>
+    </div>
   );
 }
