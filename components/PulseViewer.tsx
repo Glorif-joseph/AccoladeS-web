@@ -67,8 +67,12 @@ export default function PulseViewer({
     basculerLikePulse(pulseActuel.id);
   }
 
+  // Plein écran : la visionneuse remplit tout l'espace que lui laisse la page
+  // (flex-1 min-h-0), sans largeur maximale ni coins arrondis. Le média
+  // couvre tout l'écran sur téléphone ; sur grand écran il est affiché en
+  // entier (object-contain) pour ne pas être rogné.
   return (
-    <div className="relative w-full max-w-sm mx-auto aspect-[9/16] bg-ink rounded-2xl overflow-hidden">
+    <div className="relative flex-1 min-h-0 w-full bg-ink overflow-hidden">
       <div className="absolute top-3 left-3 right-3 flex gap-1 z-10">
         {pulses.map((p, i) => (
           <div key={p.id} className="flex-1 h-1 rounded-full bg-paper/30 overflow-hidden">
@@ -92,7 +96,7 @@ export default function PulseViewer({
           autoPlay
           muted
           playsInline
-          className="w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover md:object-contain"
         />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
@@ -100,7 +104,7 @@ export default function PulseViewer({
           key={pulseActuel.id}
           src={pulseActuel.media_url}
           alt="Pulse"
-          className="w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover md:object-contain"
         />
       )}
 
