@@ -1,89 +1,112 @@
+import Link from "next/link";
+import { creerProduit } from "../actions";
 import SiteHeader from "@/components/SiteHeader";
-import ProduitsListe from "@/components/ProduitsListe";
-import CampagnesRangee from "@/components/CampagnesRangee";
-import { createClient } from "@/lib/supabase/server";
 
-export const revalidate = 0;
+const CLASSE_CHAMP =
+  "mt-1 w-full bg-surface border border-surface-border rounded-xl px-4 py-3 text-[15px] outline-none focus:border-accent transition-colors";
 
-// Reconstruite pour de bon cette fois : reprend produits.tsx (ProduitsScreen)
-// — recherche, likes, commentaires, partage, bouton boutique. Deux écarts
-// assumés faute de code/schéma disponible :
-// 1. Le badge "Boosté" (produits les moins vendus mis en avant) dépend de
-//    `achats.produit_id`, colonne qui n'existe pas réellement (même écart
-//    documenté ailleurs pour /compte/achats et /compte/validation) —
-//    omis plutôt que de calculer sur une colonne inexistante.
-// 2. `AvatarRotatif.tsx` n'a pas été partagé — remplacé par un avatar simple
-//    (photo_url, pas de rotation entre plusieurs photos).
-export default async function Produits() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export default async function NouveauProduit({
+  searchParams,
+}: {
+  searchParams: Promise<{ erreur?: string }>;
+}) {
+  const { erreur } = await searchParams;
 
-  // Équivalent web du useFocusEffect de l'app (marque la visite à chaque
-  // affichage de l'écran Produits) : un rendu de page = une visite ici,
-  // approximation raisonnable côté web.
-  if (user) {
-    await supabase
-      .from("profiles")
-      .update({ derniere_visite_produits: new Date().toISOString() })
-      .eq("id", user.id);
-  }
-
-  const { data, error } = await supabase
-    .from("produits")
-    .select(
-      `id, titre, description, lien_boutique, prix, image_url, profile_id, bloque_jusqu_a,
-       profiles ( pseudo, statut_actuel, photo_url )`
-    )
-    .order("date_publication", { ascending: false });
-
-  const idsProduits = (data ?? []).map((p) => p.id);
-
-  const [{ data: likesData }, { data: commentairesData }] = await Promise.all([
-    supabase.from("likes").select("produit_id, utilisateur_id").in("produit_id", idsProduits.length ? idsProduits : [""]),
-    supabase.from("commentaires").select("produit_id").in("produit_id", idsProduits.length ? idsProduits : [""]),
-  ]);
-
-  const compteLikes: Record<string, number> = {};
-  const mesLikes = new Set<string>();
-  (likesData ?? []).forEach((l) => {
-    compteLikes[l.produit_id] = (compteLikes[l.produit_id] || 0) + 1;
-    if (l.utilisateur_id === user?.id) mesLikes.add(l.produit_id);
-  });
-
-  const compteCommentaires: Record<string, number> = {};
-  (commentairesData ?? []).forEach((c) => {
-    compteCommentaires[c.produit_id] = (compteCommentaires[c.produit_id] || 0) + 1;
-  });
-
-  const produits = (data ?? []).map((p) => {
-    const profil = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
-    return {
-      ...p,
-      profiles: profil ?? null,
-      nb_likes: compteLikes[p.id] || 0,
-      nb_commentaires: compteCommentaires[p.id] || 0,
-      aime: mesLikes.has(p.id),
-    };
-  });
-
-  // Plein écran : plus de conteneur max-w-6xl centré. Fond gris sur toute la
-  // largeur et jusqu'en bas de l'écran, comme sur l'app.
+  // Plein écran : plus de conteneur max-w-2xl centré, le SiteHeader est
+  // sorti du <main> pour s'étendre sur toute la largeur.
   return (
-    <div className="w-full min-h-screen bg-[#f2f2f2] flex flex-col">
+    <div className="w-full min-h-screen bg-paper flex flex-col">
       <SiteHeader />
+
+      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-border">
+        <Link
+          href="/compte/produits"
+          aria-label="Fermer"
+          className="w-6 text-xl font-light hover:text-accent transition-colors"
+        >
+          ✕
+        </Link>
+        <h1 className="font-display text-lg font-bold">Nouveau produit</h1>
+        <span className="w-6" aria-hidden="true" />
+      </div>
+
       <main className="flex-1 px-4 pt-5 pb-24">
-        {error && (
-          <p className="text-danger mb-4">
-            Impossible de charger les produits pour le moment.
+        <p className="text-ink/60 mb-6">
+          Visible immédiatement sur le site et dans l&rsquo;app.
+        </p>
+
+        {erreur && (
+          <p className="mb-6 text-sm text-danger border border-danger/30 rounded-lg px-4 py-3">
+            {erreur}
           </p>
         )}
-        <ProduitsListe
-          produits={produits}
-          utilisateurId={user?.id ?? null}
-          campagnesRangee={<CampagnesRangee />}
-        />
+
+        <form action={creerProduit} className="space-y-5" encType="multipart/form-data">
+          <label className="block">
+            <span className="text-sm text-ink/70">Titre</span>
+            <input type="text" name="titre" required className={CLASSE_CHAMP} />
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-ink/70">Description</span>
+            <textarea
+              name="description"
+              rows={4}
+              className={`${CLASSE_CHAMP} resize-none`}
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-ink/70">Lien vers la boutique (optionnel)</span>
+            <input
+              type="url"
+              name="lien_boutique"
+              placeholder="https://..."
+              className={CLASSE_CHAMP}
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-ink/70">Trimestre (optionnel)</span>
+            <input
+              type="text"
+              name="trimestre"
+              placeholder="ex. 2026-T3"
+              className={CLASSE_CHAMP}
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm text-ink/70">Image</span>
+            <input
+              type="file"
+              name="image"
+              accept="image/*"
+              className="mt-2 w-full text-sm file:mr-3 file:rounded-full file:border-0 file:bg-accent file:text-accent-ink file:font-semibold file:px-4 file:py-2"
+            />
+          </label>
+
+          <p className="text-sm text-ink/50">
+            Prix : 2 $ — fixé pour tous les produits digitaux chez AccoladeS.
+          </p>
+
+          <div className="pt-2">
+            <button
+              type="submit"
+              className="w-full rounded-full bg-accent text-ink px-6 py-3.5 font-bold hover:bg-accent-light transition-colors"
+            >
+              Publier le produit
+            </button>
+            <div className="text-center mt-4">
+              <Link
+                href="/compte/produits"
+                className="text-sm underline underline-offset-4"
+              >
+                Annuler
+              </Link>
+            </div>
+          </div>
+        </form>
       </main>
     </div>
   );
