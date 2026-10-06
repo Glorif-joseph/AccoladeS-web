@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import EmojiPicker from "./EmojiPicker";
+import EnregistreurVocal from "./EnregistreurVocal";
+import VocalPlayer from "./VocalPlayer";
 
 const BUCKET = "messages";
 const TAILLE_MAX = 5 * 1024 * 1024; // 5 Mo
@@ -13,6 +15,8 @@ type Message = {
   contenu: string;
   created_at: string;
   image_url?: string | null;
+  audio_url?: string | null;
+  audio_duree?: number | null;
   pseudoExpediteur?: string;
   photoExpediteur?: string | null;
   statutExpediteur?: string | null;
@@ -44,6 +48,7 @@ export default function SalonChat({
   const [image, setImage] = useState<File | null>(null);
   const [apercu, setApercu] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
+  const [vocalEnCours, setVocalEnCours] = useState(false);
   const finListe = useRef<HTMLDivElement>(null);
   const champTexte = useRef<HTMLTextAreaElement>(null);
   const champFichier = useRef<HTMLInputElement>(null);
@@ -180,6 +185,19 @@ export default function SalonChat({
     setEnvoi(false);
   }
 
+  // Enregistre un message vocal déjà envoyé dans le stockage.
+  async function envoyerVocal(audioUrl: string, duree: number) {
+    if (!utilisateurId) return;
+    const supabase = createClient();
+    const { error } = await supabase.from("messages_groupe").insert({
+      expediteur_id: utilisateurId,
+      contenu: "",
+      audio_url: audioUrl,
+      audio_duree: duree,
+    });
+    if (error) alert(error.message);
+  }
+
   // Supprime un de TES messages : retrait immédiat à l'écran, puis
   // suppression en base (et de l'image associée). Si la base refuse (ou ne
   // supprime rien), le message revient à sa place avec un message d'erreur.
@@ -207,10 +225,11 @@ export default function SalonChat({
       return;
     }
 
-    if (message.image_url) {
-      const chemin = cheminDansBucket(message.image_url);
-      if (chemin) await supabase.storage.from(BUCKET).remove([chemin]);
-    }
+    // Supprime aussi l'image et/ou le vocal du stockage.
+    const chemins = [message.image_url, message.audio_url]
+      .map((u) => (u ? cheminDansBucket(u) : null))
+      .filter((c): c is string => !!c);
+    if (chemins.length > 0) await supabase.storage.from(BUCKET).remove(chemins);
   }
 
   return (
@@ -284,6 +303,12 @@ export default function SalonChat({
                   </a>
                 )}
 
+                {m.audio_url && (
+                  <div className={m.contenu ? "mb-1.5" : ""}>
+                    <VocalPlayer url={m.audio_url} duree={m.audio_duree} />
+                  </div>
+                )}
+
                 {m.contenu && (
                   <p className="text-sm whitespace-pre-wrap break-words">{m.contenu}</p>
                 )}
@@ -313,46 +338,63 @@ export default function SalonChat({
         )}
 
         <div className="flex items-end gap-1 p-2.5">
-          <EmojiPicker onChoisir={insererEmoji} />
+          {!vocalEnCours && (
+            <>
+              <EmojiPicker onChoisir={insererEmoji} />
 
-          <input
-            ref={champFichier}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={choisirImage}
-          />
-          <button
-            type="button"
-            onClick={() => champFichier.current?.click()}
-            aria-label="Joindre une image"
-            className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xl hover:bg-surface transition-colors"
-          >
-            📷
-          </button>
+              <input
+                ref={champFichier}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={choisirImage}
+              />
+              <button
+                type="button"
+                onClick={() => champFichier.current?.click()}
+                aria-label="Joindre une image"
+                className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-xl hover:bg-surface transition-colors"
+              >
+                📷
+              </button>
+            </>
+          )}
 
-          <textarea
-            ref={champTexte}
-            value={texte}
-            onChange={(e) => setTexte(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                envoyer();
-              }
-            }}
-            placeholder="Écrire dans le salon..."
-            rows={1}
-            className="flex-1 min-w-0 border border-surface-border rounded-[20px] px-3.5 py-2.5 text-sm outline-none focus:border-accent resize-none max-h-24"
-          />
-          <button
-            onClick={envoyer}
-            disabled={envoi}
-            className="w-10 h-10 rounded-full bg-anthracite text-paper flex items-center justify-center shrink-0 ml-1 disabled:opacity-60"
-            aria-label="Envoyer"
-          >
-            {envoi ? "…" : "➤"}
-          </button>
+          {utilisateurId && (
+            <EnregistreurVocal
+              utilisateurId={utilisateurId}
+              prefixe="salon"
+              onEnvoye={envoyerVocal}
+              onEtat={setVocalEnCours}
+            />
+          )}
+
+          {!vocalEnCours && (
+            <>
+              <textarea
+                ref={champTexte}
+                value={texte}
+                onChange={(e) => setTexte(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    envoyer();
+                  }
+                }}
+                placeholder="Écrire dans le salon..."
+                rows={1}
+                className="flex-1 min-w-0 border border-surface-border rounded-[20px] px-3.5 py-2.5 text-sm outline-none focus:border-accent resize-none max-h-24"
+              />
+              <button
+                onClick={envoyer}
+                disabled={envoi}
+                className="w-10 h-10 rounded-full bg-anthracite text-paper flex items-center justify-center shrink-0 ml-1 disabled:opacity-60"
+                aria-label="Envoyer"
+              >
+                {envoi ? "…" : "➤"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

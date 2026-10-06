@@ -29,7 +29,7 @@ export default async function Conversation({
 
   const { data: messages } = await supabase
     .from("messages_prives")
-    .select("id, contenu, created_at, expediteur_id")
+    .select("id, contenu, created_at, expediteur_id, image_url, audio_url, audio_duree")
     .or(
       `and(expediteur_id.eq.${user.id},destinataire_id.eq.${autreId}),and(expediteur_id.eq.${autreId},destinataire_id.eq.${user.id})`
     )

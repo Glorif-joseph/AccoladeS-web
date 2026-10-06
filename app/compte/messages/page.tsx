@@ -32,13 +32,20 @@ export default async function Messages() {
 
   const { data } = await supabase
     .from("messages_prives")
-    .select("expediteur_id, destinataire_id, contenu, created_at, lu")
+    .select("expediteur_id, destinataire_id, contenu, created_at, lu, image_url, audio_url")
     .or(`expediteur_id.eq.${user.id},destinataire_id.eq.${user.id}`)
     .order("created_at", { ascending: false });
 
   const parAutre: Record<
     string,
-    { contenu: string; created_at: string; destinataire_id: string; lu: boolean }
+    {
+      contenu: string;
+      created_at: string;
+      destinataire_id: string;
+      lu: boolean;
+      image_url: string | null;
+      audio_url: string | null;
+    }
   > = {};
   (data ?? []).forEach((m) => {
     const autreId = m.expediteur_id === user.id ? m.destinataire_id : m.expediteur_id;
@@ -61,7 +68,13 @@ export default async function Messages() {
       autreId,
       autrePseudo: profilParId[autreId]?.pseudo ?? "Membre",
       autrePhoto: profilParId[autreId]?.photo_url ?? null,
-      dernierMessage: parAutre[autreId].contenu,
+      dernierMessage:
+        parAutre[autreId].contenu ||
+        (parAutre[autreId].image_url
+          ? "📷 Photo"
+          : parAutre[autreId].audio_url
+          ? "🎤 Message vocal"
+          : ""),
       dateDernierMessage: parAutre[autreId].created_at,
       nonLu: parAutre[autreId].destinataire_id === user.id && !parAutre[autreId].lu,
     }))
