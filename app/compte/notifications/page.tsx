@@ -6,6 +6,35 @@ import SiteHeader from "@/components/SiteHeader";
 
 export const revalidate = 0;
 
+// Les notifications sont créées par l'app mobile : leur colonne `lien`
+// contient des adresses de l'app (ex. /produit/<id>, /(tabs)/membres) qui
+// n'existent pas sur le site et donnaient une erreur 404. On les traduit ici
+// vers la page équivalente du site. Retourne null s'il n'y a pas d'équivalent :
+// la notification s'affiche alors sans lien (elle reste marquable comme lue).
+function lienSite(lien: string | null): string | null {
+  if (!lien) return null;
+
+  const adresse = lien.split("?")[0].replace(/\/+$/, "");
+
+  // Déjà une adresse du site : on la garde telle quelle.
+  if (/^\/(produits|campagnes|pulses|membres|compte|salon)(\/|$)/.test(adresse)) {
+    return adresse;
+  }
+
+  // Écrans principaux de l'app (onglets).
+  if (adresse === "/(tabs)/membres") return "/membres";
+  if (adresse === "/(tabs)/profil") return "/compte";
+
+  // Écrans de détail de l'app.
+  const campagne = adresse.match(/^\/campagne\/([^/]+)$/);
+  if (campagne) return `/campagnes/${campagne[1]}`;
+
+  const produit = adresse.match(/^\/produit\/([^/]+)$/);
+  if (produit) return `/produits/${produit[1]}`;
+
+  return null;
+}
+
 function formaterDate(iso: string) {
   return new Date(iso).toLocaleString("fr-FR", {
     day: "numeric",
@@ -67,6 +96,7 @@ export default async function Notifications() {
 
           <ul className="space-y-2.5">
             {notifications?.map((n) => {
+              const lien = lienSite(n.lien);
               const contenu = (
                 <div className="flex-1 min-w-0">
                   <p className={n.lu ? "text-ink/70" : "font-medium"}>
@@ -93,9 +123,9 @@ export default async function Notifications() {
                       className="mt-2 h-2.5 w-2.5 rounded-full bg-accent shrink-0"
                     />
                   )}
-                  {n.lien ? (
+                  {lien ? (
                     <Link
-                      href={n.lien}
+                      href={lien}
                       className="flex-1 min-w-0 flex items-start gap-4 hover:text-accent transition-colors"
                     >
                       {contenu}
