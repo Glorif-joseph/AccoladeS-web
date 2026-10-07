@@ -18,6 +18,7 @@ export default async function SiteHeader() {
 
   let nonLues = 0;
   let nonLusMessages = 0;
+  let nonVusPulses = 0;
   let photoUrl: string | null = null;
 
   if (user) {
@@ -49,6 +50,26 @@ export default async function SiteHeader() {
       .select("id", { count: "exact", head: true })
       .gt("created_at", depuisSalon)
       .neq("expediteur_id", user.id);
+
+    // Pulses actifs (moins de 24 h) d'autres membres que tu n'as pas encore
+    // vus : même règle que la page Pulses et que le badge « Pulse ».
+    const { data: pulsesActifs } = await supabase
+      .from("pulses")
+      .select("id")
+      .gt("expires_at", new Date().toISOString())
+      .neq("profile_id", user.id);
+
+    const idsPulses = (pulsesActifs ?? []).map((p) => p.id as string);
+    if (idsPulses.length > 0) {
+      const { data: vues } = await supabase
+        .from("pulse_vues")
+        .select("pulse_id")
+        .eq("viewer_id", user.id)
+        .in("pulse_id", idsPulses);
+
+      const vus = new Set((vues ?? []).map((v) => v.pulse_id as string));
+      nonVusPulses = idsPulses.filter((id) => !vus.has(id)).length;
+    }
 
     nonLues = countNotifs ?? 0;
     nonLusMessages = (countMessages ?? 0) + (countSalon ?? 0);
@@ -86,6 +107,7 @@ export default async function SiteHeader() {
           photoUrl={photoUrl}
           nonLuesInitial={nonLues}
           nonLusMessagesInitial={nonLusMessages}
+          nonVusPulsesInitial={nonVusPulses}
         />
       )}
     </header>

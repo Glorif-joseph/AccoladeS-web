@@ -3,25 +3,28 @@ import Image from "next/image";
 import { MdHome, MdAddCircle } from "react-icons/md";
 import MessagesBadgeIcon from "./MessagesBadgeIcon";
 import NotificationBell from "./NotificationBell";
+import PulseBadgeLink from "./PulseBadgeLink";
 
 // Équivalent de components/BarreOr.tsx côté app : fond turquoise plein,
 // avatar à gauche, bouton texte "Pulse" puis icônes à droite (house.fill,
 // message.fill, bell.fill, plus.circle.fill — Material Icons via
 // components/ui/icon-symbol.tsx côté app, react-icons/md ici pour un rendu
-// identique). On ne réplique pas les compteurs "nouveaux produits / nouveaux
-// pulses" (basés sur derniere_visite_produits et les vues de pulses) pour
-// rester dans le scope de cette phase — messages et notifications suffisent
-// à couvrir l'essentiel du "en direct".
+// identique). On ne réplique pas le compteur "nouveaux produits" (basé sur
+// derniere_visite_produits) pour rester dans le scope de cette phase —
+// messages, notifications et pulses non vus suffisent à couvrir l'essentiel
+// du "en direct".
 export default function AccentBar({
   utilisateurId,
   photoUrl,
   nonLuesInitial,
   nonLusMessagesInitial,
+  nonVusPulsesInitial,
 }: {
   utilisateurId: string;
   photoUrl: string | null;
   nonLuesInitial: number;
   nonLusMessagesInitial: number;
+  nonVusPulsesInitial: number;
 }) {
   return (
     <div className="h-[52px] bg-accent flex items-center justify-between px-4">
@@ -40,9 +43,7 @@ export default function AccentBar({
       </Link>
 
       <div className="flex items-center gap-3.5">
-        <Link href="/pulses" className="text-white font-bold text-sm">
-          Pulse
-        </Link>
+        <PulseBadgeLink utilisateurId={utilisateurId} nonVusInitial={nonVusPulsesInitial} />
 
         <Link
           href="/produits"
