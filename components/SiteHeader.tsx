@@ -19,6 +19,7 @@ export default async function SiteHeader() {
   let nonLues = 0;
   let nonLusMessages = 0;
   let nonVusPulses = 0;
+  let nouveauxProduits = 0;
   let photoUrl: string | null = null;
 
   if (user) {
@@ -36,7 +37,7 @@ export default async function SiteHeader() {
           .eq("lu", false),
         supabase
           .from("profiles")
-          .select("photo_url, derniere_visite_salon")
+          .select("photo_url, derniere_visite_salon, derniere_visite_produits")
           .eq("id", user.id)
           .single(),
       ]);
@@ -70,6 +71,18 @@ export default async function SiteHeader() {
       const vus = new Set((vues ?? []).map((v) => v.pulse_id as string));
       nonVusPulses = idsPulses.filter((id) => !vus.has(id)).length;
     }
+
+    // Produits publiés par d'autres membres depuis ta dernière visite de la
+    // page Produits (badge de l'icône maison). La page Produits met cette
+    // date à jour avant d'afficher l'en-tête : le badge y est donc à 0.
+    const depuisProduits = profil?.derniere_visite_produits ?? "1970-01-01T00:00:00Z";
+    const { count: countProduits } = await supabase
+      .from("produits")
+      .select("id", { count: "exact", head: true })
+      .gt("date_publication", depuisProduits)
+      .neq("profile_id", user.id);
+
+    nouveauxProduits = countProduits ?? 0;
 
     nonLues = countNotifs ?? 0;
     nonLusMessages = (countMessages ?? 0) + (countSalon ?? 0);
@@ -108,6 +121,7 @@ export default async function SiteHeader() {
           nonLuesInitial={nonLues}
           nonLusMessagesInitial={nonLusMessages}
           nonVusPulsesInitial={nonVusPulses}
+          nouveauxProduitsInitial={nouveauxProduits}
         />
       )}
     </header>

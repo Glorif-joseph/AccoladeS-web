@@ -1,9 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
-import { MdHome, MdAddCircle } from "react-icons/md";
+import { MdAddCircle } from "react-icons/md";
 import MessagesBadgeIcon from "./MessagesBadgeIcon";
 import NotificationBell from "./NotificationBell";
 import PulseBadgeLink from "./PulseBadgeLink";
+import ProduitsBadgeIcon from "./ProduitsBadgeIcon";
 
 // Équivalent de components/BarreOr.tsx côté app : fond turquoise plein,
 // avatar à gauche, bouton texte "Pulse" puis icônes à droite (house.fill,
@@ -19,12 +20,14 @@ export default function AccentBar({
   nonLuesInitial,
   nonLusMessagesInitial,
   nonVusPulsesInitial,
+  nouveauxProduitsInitial,
 }: {
   utilisateurId: string;
   photoUrl: string | null;
   nonLuesInitial: number;
   nonLusMessagesInitial: number;
   nonVusPulsesInitial: number;
+  nouveauxProduitsInitial: number;
 }) {
   return (
     <div className="h-[52px] bg-accent flex items-center justify-between px-4">
@@ -45,13 +48,10 @@ export default function AccentBar({
       <div className="flex items-center gap-3.5">
         <PulseBadgeLink utilisateurId={utilisateurId} nonVusInitial={nonVusPulsesInitial} />
 
-        <Link
-          href="/produits"
-          aria-label="Produits"
-          className="text-white/[0.85] hover:text-white transition-colors"
-        >
-          <MdHome size={20} aria-hidden="true" />
-        </Link>
+        <ProduitsBadgeIcon
+          utilisateurId={utilisateurId}
+          nouveauxInitial={nouveauxProduitsInitial}
+        />
 
         <MessagesBadgeIcon
           utilisateurId={utilisateurId}
