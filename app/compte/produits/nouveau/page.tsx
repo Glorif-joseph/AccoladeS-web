@@ -57,16 +57,6 @@ export default async function NouveauProduit({
           </label>
 
           <label className="block">
-            <span className="text-sm text-ink/70">Lien vers la boutique (optionnel)</span>
-            <input
-              type="url"
-              name="lien_boutique"
-              placeholder="https://..."
-              className={CLASSE_CHAMP}
-            />
-          </label>
-
-          <label className="block">
             <span className="text-sm text-ink/70">Trimestre (optionnel)</span>
             <input
               type="text"
