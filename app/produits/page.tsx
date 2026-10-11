@@ -8,7 +8,7 @@ export const revalidate = 0;
 // Reconstruite pour de bon cette fois : reprend produits.tsx (ProduitsScreen)
 // — recherche, likes, commentaires, partage, bouton boutique. Deux écarts
 // assumés faute de code/schéma disponible :
-// 1. Le badge "🚀 Boosté" (produits les moins vendus mis en avant) dépend de
+// 1. Le badge "Boosté" (produits les moins vendus mis en avant) dépend de
 //    `achats.produit_id`, colonne qui n'existe pas réellement (même écart
 //    documenté ailleurs pour /compte/achats et /compte/validation) —
 //    omis plutôt que de calculer sur une colonne inexistante.
@@ -33,7 +33,7 @@ export default async function Produits() {
   const { data, error } = await supabase
     .from("produits")
     .select(
-      `id, titre, description, lien_boutique, prix, image_url, profile_id, bloque_jusqu_a,
+      `id, titre, description, lien_boutique, prix, image_url, profile_id, bloque_jusqu_a, date_publication,
        profiles ( pseudo, statut_actuel, photo_url )`
     )
     .order("date_publication", { ascending: false });
@@ -68,10 +68,12 @@ export default async function Produits() {
     };
   });
 
+  // Plein écran : plus de conteneur max-w-6xl centré. Fond gris sur toute la
+  // largeur et jusqu'en bas de l'écran, comme sur l'app.
   return (
-    <main className="min-h-screen">
+    <div className="w-full min-h-screen bg-[#f2f2f2] flex flex-col">
       <SiteHeader />
-      <div className="max-w-6xl mx-auto px-8 py-8">
+      <main className="flex-1 px-4 pt-5 pb-24">
         {error && (
           <p className="text-danger mb-4">
             Impossible de charger les produits pour le moment.
@@ -82,7 +84,7 @@ export default async function Produits() {
           utilisateurId={user?.id ?? null}
           campagnesRangee={<CampagnesRangee />}
         />
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
