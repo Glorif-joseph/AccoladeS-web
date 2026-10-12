@@ -22,8 +22,8 @@ export default function ProfilPhotos({
   photosCouvertureInitial: string[];
   photosAvatarInitial: string[];
 }) {
-  const [photosCouverture, setPhotosCouverture] = useState(photosCouvertureInitial);
   const [photosAvatar, setPhotosAvatar] = useState(photosAvatarInitial);
+  const [photosCouverture, setPhotosCouverture] = useState(photosCouvertureInitial);
   const [coverIndex, setCoverIndex] = useState(0);
   const [avatarIndex, setAvatarIndex] = useState(0);
   const [envoiEnCours, setEnvoiEnCours] = useState<"avatar" | "couverture" | null>(null);
@@ -132,8 +132,9 @@ export default function ProfilPhotos({
       </div>
 
       <div className="max-w-2xl mx-auto px-8">
-        {/* Avatar + pseudo, chevauche la couverture comme dans l'app ; le
-            badge de palier reprend le gris neutre observé sur la capture
+        {/* Avatar + pseudo, chevauche la couverture comme dans l'app ;
+            "relative z-10" fait passer cette ligne AU-DESSUS de la couverture.
+            Le badge de palier reprend le gris neutre observé sur la capture
             partagée ("Nouveau"), pas une teinte turquoise inventée */}
         <div className="relative z-10 flex items-end justify-between -mt-9 mb-1">
           <div className="flex items-end gap-3">
@@ -151,7 +152,7 @@ export default function ProfilPhotos({
                   alt=""
                   width={72}
                   height={72}
-                  className="rounded-full border-[3px] border-paper object-cover"
+                  className="w-[72px] h-[72px] rounded-full border-[3px] border-paper object-cover"
                 />
               ) : (
                 <div className="w-[72px] h-[72px] rounded-full border-[3px] border-paper bg-anthracite flex items-center justify-center text-accent text-2xl font-bold">

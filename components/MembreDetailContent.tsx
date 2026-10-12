@@ -105,7 +105,7 @@ export default function MembreDetailContent({
               alt=""
               width={76}
               height={76}
-              className="rounded-full border-[3px] border-paper object-cover"
+              className="w-[76px] h-[76px] rounded-full border-[3px] border-paper object-cover"
             />
           ) : (
             <div className="w-[76px] h-[76px] rounded-full border-[3px] border-paper bg-anthracite flex items-center justify-center text-accent text-2xl font-bold">
@@ -171,7 +171,7 @@ export default function MembreDetailContent({
                     alt=""
                     width={48}
                     height={48}
-                    className="rounded-lg object-cover shrink-0"
+                    className="w-12 h-12 rounded-lg object-cover shrink-0"
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">{c.titre}</p>
@@ -213,7 +213,7 @@ export default function MembreDetailContent({
                   alt=""
                   width={64}
                   height={64}
-                  className="rounded-lg object-cover shrink-0"
+                  className="w-16 h-16 rounded-lg object-cover shrink-0"
                 />
               ) : (
                 <div className="w-16 h-16 rounded-lg bg-surface shrink-0" />

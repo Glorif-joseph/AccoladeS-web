@@ -31,14 +31,14 @@ export default function AccentBar({
 }) {
   return (
     <div className="h-[52px] bg-accent flex items-center justify-between px-4">
-      <Link href="/compte" aria-label="Mon profil">
+      <Link href="/compte" aria-label="Mon profil" className="shrink-0">
         {photoUrl ? (
           <Image
             src={photoUrl}
             alt=""
             width={32}
             height={32}
-            className="rounded-full border-[1.5px] border-accent-ink object-cover"
+            className="w-8 h-8 rounded-full border-[1.5px] border-accent-ink object-cover"
           />
         ) : (
           <span className="w-8 h-8 rounded-full border-[1.5px] border-accent-ink bg-accent-ink/20 block" />
