@@ -6,6 +6,7 @@ import { seDeconnecter } from "../(auth)/actions";
 import { enregistrerBio } from "./actions";
 import SiteHeader from "@/components/SiteHeader";
 import ProfilPhotos from "@/components/ProfilPhotos";
+import { enregistrerLienBoutique } from "./lienBoutique";
 
 export const revalidate = 0;
 
@@ -30,7 +31,12 @@ const LIBELLES_ACHAT: Record<string, string> = {
 // pas un titre de produit, cohérent avec le modèle réellement en place
 // (le même que /compte/achats).
 // L'upload avatar/couverture (components/ProfilPhotos.tsx) est branché.
-export default async function Compte() {
+export default async function Compte({
+  searchParams,
+}: {
+  searchParams: Promise<{ boutique?: string; detail?: string }>;
+}) {
+  const { boutique, detail } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -41,7 +47,7 @@ export default async function Compte() {
   const { data: profil } = await supabase
     .from("profiles")
     .select(
-      "pseudo, email, telephone, statut_actuel, photo_url, photo_couverture_url, photos_couverture, photos_avatar, bio, points"
+      "pseudo, email, telephone, statut_actuel, photo_url, photo_couverture_url, photos_couverture, photos_avatar, bio, points, lien_boutique"
     )
     .eq("id", user.id)
     .single();
@@ -67,6 +73,7 @@ export default async function Compte() {
     { data: mesProduits },
     { data: mesCampagnes },
     { data: amendes },
+    { count: nbVentesValidees },
   ] = await Promise.all([
     supabase
       .from("achats")
@@ -108,6 +115,12 @@ export default async function Compte() {
       .select("id, mois_concerne, montant, statut")
       .eq("profile_id", user.id)
       .order("date_creation", { ascending: false }),
+    // Ventes validées : elles débloquent la modification du lien de boutique.
+    supabase
+      .from("achats")
+      .select("id", { count: "exact", head: true })
+      .eq("vendeur_id", user.id)
+      .eq("statut_verification", "validé"),
   ]);
 
   // Compteur de réservations par campagne, comme profil.tsx (une seule
@@ -134,6 +147,20 @@ export default async function Compte() {
   const achatsRestants = seuilSuivant
     ? Math.max(0, seuilSuivant.min - (nbAchatsTotal ?? 0))
     : 0;
+
+  // Lien de boutique : on peut l'enregistrer une première fois à tout moment,
+  // puis le modifier seulement à partir de SEUIL_VENTES ventes validées.
+  const SEUIL_VENTES = 1000;
+  const nbVentes = nbVentesValidees ?? 0;
+  const aUnLien = !!profil.lien_boutique;
+  const verrouille = aUnLien && nbVentes < SEUIL_VENTES;
+
+  const MESSAGES_BOUTIQUE: Record<string, string> = {
+    ok: "Lien enregistré.",
+    invalide: "Lien invalide. Exemple : https://maboutique.com",
+    verrouille: `Tu pourras modifier ton lien à partir de ${SEUIL_VENTES} ventes.`,
+    erreur: detail ?? "Impossible d'enregistrer le lien pour le moment.",
+  };
 
 
 
@@ -243,6 +270,57 @@ export default async function Compte() {
             </p>
           )}
         </div>
+
+        {/* Lien de ma boutique */}
+        <form
+          id="boutique"
+          action={enregistrerLienBoutique}
+          className="bg-surface border border-surface-border rounded-[10px] p-3.5 mb-6 scroll-mt-20"
+        >
+          <p className="text-[11px] text-muted uppercase tracking-wide mb-1.5">
+            Lien de ma boutique
+          </p>
+          <input
+            type="text"
+            inputMode="url"
+            name="lien_boutique"
+            defaultValue={profil.lien_boutique ?? ""}
+            placeholder="https://..."
+            autoCapitalize="none"
+            readOnly={verrouille}
+            aria-readonly={verrouille}
+            className={`w-full bg-transparent text-sm outline-none placeholder:text-muted ${
+              verrouille ? "text-ink/60" : ""
+            }`}
+          />
+
+          <p className="text-xs text-muted mt-2">
+            {!aUnLien
+              ? `Ajoute le lien de ta boutique : les acheteurs y seront envoyés depuis tes produits. Une fois enregistré, tu ne pourras le modifier qu'à partir de ${SEUIL_VENTES} ventes (tu en as ${nbVentes}).`
+              : verrouille
+              ? `Modifiable à partir de ${SEUIL_VENTES} ventes : ${nbVentes} / ${SEUIL_VENTES} pour l'instant.`
+              : `Tu as atteint ${SEUIL_VENTES} ventes : tu peux modifier ton lien.`}
+          </p>
+
+          {boutique && MESSAGES_BOUTIQUE[boutique] && (
+            <p
+              className={`text-xs mt-2 font-semibold ${
+                boutique === "ok" ? "text-success" : "text-danger"
+              }`}
+            >
+              {MESSAGES_BOUTIQUE[boutique]}
+            </p>
+          )}
+
+          {!verrouille && (
+            <button
+              type="submit"
+              className="mt-2 rounded-full bg-accent text-accent-ink text-xs font-semibold px-3.5 py-1.5"
+            >
+              Enregistrer
+            </button>
+          )}
+        </form>
 
         {/* Mes produits publiés */}
         <div className="flex items-center justify-between mt-2 mb-2.5">

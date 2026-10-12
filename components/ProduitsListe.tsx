@@ -11,7 +11,7 @@ type Produit = {
   id: string;
   titre: string;
   description: string;
-  lien_boutique: string;
+  lien_boutique?: string | null;
   prix: number;
   image_url: string | null;
   profile_id: string;
@@ -21,11 +21,18 @@ type Produit = {
     pseudo: string;
     statut_actuel: string;
     photo_url: string | null;
+    lien_boutique?: string | null;
   } | null;
   nb_likes: number;
   nb_commentaires: number;
   aime: boolean;
 };
+
+// Lien de la boutique du vendeur : celui de son profil, ou à défaut celui
+// enregistré sur d'anciens produits.
+function lienDe(produit: Produit) {
+  return produit.profiles?.lien_boutique || produit.lien_boutique || null;
+}
 
 // Date d'une publication, comme sur Facebook : « À l'instant », « 5 min »,
 // « 2 h », « Hier », « 3 j », puis « 12 octobre » (avec l'année si elle
@@ -140,7 +147,13 @@ export default function ProduitsListe({
       return;
     }
 
-    window.open(produit.lien_boutique, "_blank", "noopener,noreferrer");
+    const lien = lienDe(produit);
+    if (!lien) {
+      alert("Ce vendeur n'a pas encore renseigné le lien de sa boutique.");
+      return;
+    }
+
+    window.open(lien, "_blank", "noopener,noreferrer");
 
     // Contrairement à l'app, pas de déclaration de preuve liée à CE produit
     // précis ici : la vraie table `achats` n'a pas de colonne `produit_id`
@@ -157,7 +170,10 @@ export default function ProduitsListe({
   }
 
   async function partager(produit: Produit) {
-    const message = `Découvre "${produit.titre}" par ${produit.profiles?.pseudo} — ${produit.lien_boutique}`;
+    const lien = lienDe(produit);
+    const message = `Découvre "${produit.titre}" par ${produit.profiles?.pseudo}${
+      lien ? ` — ${lien}` : ""
+    }`;
     if (navigator.share) {
       try {
         await navigator.share({ text: message });
@@ -195,7 +211,8 @@ export default function ProduitsListe({
         {filtres.map((produit) => {
           const estBloque =
             produit.bloque_jusqu_a && new Date(produit.bloque_jusqu_a) > new Date();
-          const peutAcheter = produit.profile_id !== utilisateurId && !estBloque;
+          const peutAcheter =
+            produit.profile_id !== utilisateurId && !estBloque && !!lienDe(produit);
           const pseudo = produit.profiles?.pseudo ?? "Membre";
 
           return (

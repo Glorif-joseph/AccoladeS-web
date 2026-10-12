@@ -34,7 +34,7 @@ export default async function Produits() {
     .from("produits")
     .select(
       `id, titre, description, lien_boutique, prix, image_url, profile_id, bloque_jusqu_a, date_publication,
-       profiles ( pseudo, statut_actuel, photo_url )`
+       profiles ( pseudo, statut_actuel, photo_url, lien_boutique )`
     )
     .order("date_publication", { ascending: false });
 
