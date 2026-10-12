@@ -44,12 +44,15 @@ export default function MembresListe({ membres }: { membres: Membre[] }) {
           >
             <Link href={`/membres/${m.id}`} className="flex items-center gap-3 flex-1 min-w-0">
               {m.photo_url ? (
+                // Taille fixée en CSS (w-11 h-11) : sans elle, la hauteur
+                // suit les proportions de la photo et l'avatar devient un
+                // ovale, ou est écrasé dans la ligne.
                 <Image
                   src={m.photo_url}
                   alt=""
                   width={44}
                   height={44}
-                  className="rounded-full object-cover shrink-0"
+                  className="w-11 h-11 rounded-full object-cover shrink-0"
                 />
               ) : (
                 <div className="w-11 h-11 rounded-full bg-anthracite flex items-center justify-center text-accent font-bold shrink-0">
