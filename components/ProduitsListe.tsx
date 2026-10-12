@@ -9,7 +9,7 @@ import CommentairesModal from "./CommentairesModal";
 
 type Produit = {
   id: string;
-  titre: string;
+  titre?: string | null;
   description: string;
   lien_boutique?: string | null;
   prix: number;
@@ -162,7 +162,9 @@ export default function ProduitsListe({
     // via /compte/achats, qui utilise le vrai schéma.
     if (
       confirm(
-        `As-tu bien acheté "${produit.titre}" ? Déclare ta preuve d'achat sur la page Mes achats.`
+        `As-tu bien acheté ${
+          produit.titre ? `"${produit.titre}"` : "ce produit"
+        } ? Déclare ta preuve d'achat sur la page Mes achats.`
       )
     ) {
       window.location.href = "/compte/achats";
@@ -171,7 +173,9 @@ export default function ProduitsListe({
 
   async function partager(produit: Produit) {
     const lien = lienDe(produit);
-    const message = `Découvre "${produit.titre}" par ${produit.profiles?.pseudo}${
+    const message = `Découvre ${
+      produit.titre ? `"${produit.titre}"` : "un produit"
+    } par ${produit.profiles?.pseudo}${
       lien ? ` — ${lien}` : ""
     }`;
     if (navigator.share) {
@@ -269,7 +273,7 @@ export default function ProduitsListe({
                 <Link href={`/produits/${produit.id}`} className="block relative bg-surface">
                   <Image
                     src={produit.image_url}
-                    alt={produit.titre}
+                    alt={produit.titre || "Publication"}
                     width={680}
                     height={680}
                     sizes="(min-width: 680px) 680px, 100vw"
@@ -288,9 +292,11 @@ export default function ProduitsListe({
               <div className="bg-[#f0f2f5] px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2.5">
                 <Link href={`/produits/${produit.id}`} className="flex-1 min-w-0">
                   <p className="text-xs text-muted">Produit digital · {produit.prix} $</p>
-                  <p className="text-[15px] font-semibold leading-snug truncate">
-                    {produit.titre}
-                  </p>
+                  {produit.titre && (
+                    <p className="text-[15px] font-semibold leading-snug truncate">
+                      {produit.titre}
+                    </p>
+                  )}
                   {!produit.image_url && estBloque && (
                     <p className="text-xs font-bold text-danger mt-0.5">Indisponible</p>
                   )}

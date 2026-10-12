@@ -43,26 +43,16 @@ export default async function NouveauProduit({
 
         <form action={creerProduit} className="space-y-5" encType="multipart/form-data">
           <label className="block">
-            <span className="text-sm text-ink/70">Titre</span>
-            <input type="text" name="titre" required className={CLASSE_CHAMP} />
+            <span className="text-sm text-ink/70">Titre (optionnel)</span>
+            <input type="text" name="titre" className={CLASSE_CHAMP} />
           </label>
 
           <label className="block">
-            <span className="text-sm text-ink/70">Description</span>
+            <span className="text-sm text-ink/70">Description (optionnel)</span>
             <textarea
               name="description"
               rows={4}
               className={`${CLASSE_CHAMP} resize-none`}
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-sm text-ink/70">Trimestre (optionnel)</span>
-            <input
-              type="text"
-              name="trimestre"
-              placeholder="ex. 2026-T3"
-              className={CLASSE_CHAMP}
             />
           </label>
 
