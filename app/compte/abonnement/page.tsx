@@ -5,6 +5,12 @@ import SiteHeader from "@/components/SiteHeader";
 
 export const revalidate = 0;
 
+// Lien de paiement des abonnements (Mobile Money, PayPal, Flutterwave…).
+// Colle ton adresse entre les guillemets, par exemple
+// "https://paiement.exemple.com/accolades". Tant que c'est vide, le bouton
+// « Payer mon abonnement » n'apparaît pas.
+const LIEN_PAIEMENT = "";
+
 const LIBELLES: Record<string, { texte: string; classe: string }> = {
   payé: { texte: "Payé", classe: "text-success" },
   en_attente: { texte: "En attente", classe: "text-ink/50" },
@@ -33,6 +39,24 @@ export default async function Abonnement() {
         ← Mon compte
       </Link>
       <h1 className="font-display text-3xl mt-3 mb-8">Mon abonnement</h1>
+
+      {LIEN_PAIEMENT && (
+        <section className="bg-surface border border-surface-border rounded-xl p-4 mb-8">
+          <h2 className="text-[17px] font-bold mb-1">Payer mon abonnement</h2>
+          <p className="text-sm text-ink/60 mb-3.5">
+            Règle ton abonnement avec le lien de paiement. Il s&rsquo;ouvre dans un nouvel
+            onglet.
+          </p>
+          <a
+            href={LIEN_PAIEMENT}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full text-center rounded-full bg-accent text-accent-ink font-semibold text-sm py-3"
+          >
+            Payer mon abonnement
+          </a>
+        </section>
+      )}
 
       {(!abonnements || abonnements.length === 0) && (
         <p className="text-ink/50 text-sm">Aucun abonnement enregistré pour l&rsquo;instant.</p>

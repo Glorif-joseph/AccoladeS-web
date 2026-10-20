@@ -95,7 +95,7 @@ export default async function DetailProduit({
               )}
             </p>
           </div>
-          <p className="font-display text-2xl">{produit.prix} €</p>
+          <p className="font-display text-2xl">{produit.prix} $</p>
         </div>
 
         {produit.description && (
