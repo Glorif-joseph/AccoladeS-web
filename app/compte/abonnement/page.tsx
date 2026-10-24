@@ -62,8 +62,12 @@ export default async function Abonnement({
   const peutDeclarer = !declarationMois || declarationMois.statut === "refusé";
 
   return (
-    <main className="min-h-screen max-w-2xl mx-auto px-8 py-10">
+    // Plein écran : plus de conteneur max-w-2xl centré. Le SiteHeader est
+    // sorti du <main> pour s'étendre sur toute la largeur.
+    <div className="w-full min-h-screen bg-paper flex flex-col">
       <SiteHeader />
+
+      <main className="flex-1 px-4 pt-6 pb-24">
 
       <Link href="/compte" className="text-sm text-ink/50 hover:text-accent transition-colors">
         ← Mon compte
@@ -167,6 +171,7 @@ export default async function Abonnement({
           );
         })}
       </ul>
-    </main>
+      </main>
+    </div>
   );
 }
